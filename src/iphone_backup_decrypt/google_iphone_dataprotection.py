@@ -1,6 +1,8 @@
 #####
 # This code is derived from 'iphone-dataprotection':
 # https://code.google.com/p/iphone-dataprotection/
+#     iphone-dataprotection/python_scripts/keystore/keybag.py
+#     iphone-dataprotection/python_scripts/crypto/aes.py
 # Original License: https://opensource.org/licenses/BSD-3-Clause
 #####
 
