@@ -9,7 +9,7 @@ itself based on the [iphone-dataprotection](https://code.google.com/p/iphone-dat
 Requires [Python 3.4](https://www.python.org/) or higher.
 
 The code requires a cryptographic library providing the `Crypto` name. 
-Use `pycryptodome`, unless `pycrypto` is already installed (the latter is older and can be hard to install, anyway).
+Use `pycryptodome` (but note that this clashes with `pycrypto`, if that is already installed).
 
 The backup decryption keys are protected using 10 million rounds of PBKDF2 with SHA256, then 10 thousand further iterations of PBKDF2 with SHA-1.
 To speed up decryption, `fastpbkdf2` is desirable; otherwise the code will fall back to using standard library functions.
@@ -20,12 +20,17 @@ Ideal dependencies:
 pip install biplist pycryptodome fastpbkdf2
 ```
 
-Minimal required dependencies (as in `requirements.txt`):
+Minimal required dependencies (automatically installed):
 ```shell script
 pip install biplist pycryptodome
 ```
 
-Then clone this repository, or just download the two required Python files.
+Install directly from GitHub via `pip`:
+```shell script
+pip install git+https://github.com/jsharkey13/iphone_backup_decrypt
+# Optionally:
+pip install fastpbkdf2
+```
 
 ## Usage
 
@@ -39,7 +44,7 @@ After creating the class, use the `EncryptedBackup.save_manifest_file(...)` meth
 
 A minimal example to decrypt and extract the call history SQLite database might look like:
 ```python
-from iphone_backup import EncryptedBackup, RelativePath
+from iphone_backup_decrypt import EncryptedBackup, RelativePath
 
 passphrase = "..."  # Or load passphrase more securely from stdin, or a file, etc.
 backup_path = "%AppData%\\Apple Computer\\MobileSync\\Backup\\[device-specific-hash]"
