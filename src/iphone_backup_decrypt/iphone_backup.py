@@ -5,7 +5,8 @@ import struct
 import tempfile
 
 import biplist
-import google_iphone_dataprotection
+
+from . import google_iphone_dataprotection
 
 __all__ = ["EncryptedBackup", "RelativePath"]
 
