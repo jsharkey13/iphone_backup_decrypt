@@ -8,7 +8,7 @@ import biplist
 
 from . import google_iphone_dataprotection
 
-__all__ = ["EncryptedBackup", "RelativePath"]
+__all__ = ["EncryptedBackup", "RelativePath", "RelativePathsLike"]
 
 
 class RelativePath:
@@ -25,6 +25,18 @@ class RelativePath:
     # Very common external files:
     WHATSAPP_MESSAGES = "ChatStorage.sqlite"
     WHATSAPP_CONTACTS = "ContactsV2.sqlite"
+
+
+class RelativePathsLike:
+    """Relative path wildcards for commonly accessed groups of files."""
+
+    # Standard iOS file locations:
+    CAMERA_ROLL = "Media/DCIM/%APPLE/IMG%.%"
+    SMS_ATTACHMENTS = "Library/SMS/Attachments/%.%"
+
+    # WhatsApp paths, which contain "."s and so must search for ".jpg" and ".mp4" individually:
+    WHATSAPP_ATTACHED_IMAGES = "Message/Media/%.jpg"
+    WHATSAPP_ATTACHED_VIDEOS = "Message/Media/%.mp4"
 
 
 # Based on https://stackoverflow.com/questions/1498342/how-to-decrypt-an-encrypted-apple-itunes-iphone-backup
@@ -142,6 +154,8 @@ class EncryptedBackup:
         file_data = plist['$objects'][plist['$top']['root'].integer]
         size = file_data['Size']
         protection_class = file_data['ProtectionClass']
+        if "EncryptionKey" not in file_data:
+            return None  # This file is not encrypted; either a directory or empty.
         encryption_key = plist['$objects'][file_data['EncryptionKey'].integer]['NS.data'][4:]
         inner_key = self._keybag.unwrapKeyForClass(protection_class, encryption_key)
         # Find the encrypted version of the file on disk and decrypt it:
@@ -197,7 +211,7 @@ class EncryptedBackup:
             cur.execute(query, (relative_path,))
             result = cur.fetchone()
         except sqlite3.Error:
-            return False
+            return None
         file_id, file_bplist = result
         # Decrypt the requested file:
         return self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
@@ -222,5 +236,51 @@ class EncryptedBackup:
         output_directory = os.path.dirname(output_filename)
         if output_directory:
             os.makedirs(output_directory, exist_ok=True)
-        with open(output_filename, 'wb') as outfile:
-            outfile.write(decrypted_data)
+        if decrypted_data is not None:
+            with open(output_filename, 'wb') as outfile:
+                outfile.write(decrypted_data)
+
+    def extract_files(self, *, relative_paths_like, output_folder):
+        """
+        Decrypt files matching a relative path query and output them to a folder.
+
+        This method is not really designed to match very loose relative paths like '%' or '%.jpg'.
+        Since the folder structure is not preserved, files may be overwritten and/or unclear in origin.
+        Use very generic relative path matching at your own risk.
+
+        :param relative_paths_like:
+            An iOS 'relativePath' of the files to be decrypted, containing '%' or '_' SQL LIKE wildcards.
+            Common relative path wildcards are provided by the 'RelativePathsLike' class, otherwise these can be found
+            by opening the decrypted Manifest.db file and examining the Files table.
+        :param output_folder:
+            The folder to write output files into. Files will be named with their internal iOS filenames and will
+            overwrite anything in the output folder with that name.
+        """
+        # Ensure that we've initialised everything:
+        if self._temp_manifest_db_conn is None:
+            self._decrypt_manifest_db_file()
+        # Use Manifest.db to find the on-disk filename(s) and file metadata, including the keys, for the file(s).
+        # The metadata is contained in the 'file' column, as a binary PList file; the filename in 'relativePath':
+        try:
+            cur = self._temp_manifest_db_conn.cursor()
+            query = """
+                SELECT fileID, relativePath, file
+                FROM Files
+                WHERE relativePath LIKE ?
+                ORDER BY domain, relativePath;
+            """
+            cur.execute(query, (relative_paths_like,))
+            results = cur.fetchall()
+        except sqlite3.Error:
+            return None
+        # Ensure output destination exists then loop through matches:
+        os.makedirs(output_folder, exist_ok=True)
+        for file_id, matched_relative_path, file_bplist in results:
+            filename = os.path.basename(matched_relative_path)
+            output_path = os.path.join(output_folder, filename)
+            # Decrypt the file:
+            decrypted_data = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
+            # Output to disk:
+            if decrypted_data is not None:
+                with open(output_path, 'wb') as outfile:
+                    outfile.write(decrypted_data)

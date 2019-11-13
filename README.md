@@ -42,15 +42,20 @@ Very common files, like those for the call history or text message databases, ca
 If the relative path is not known, you can manually open the `Manifest.db` SQLite database and explore the `Files` table to find those of interest.
 After creating the class, use the `EncryptedBackup.save_manifest_file(...)` method to store a decrypted version.
 
-A minimal example to decrypt and extract the call history SQLite database might look like:
+A minimal example to decrypt and extract some files might look like:
 ```python
-from iphone_backup_decrypt import EncryptedBackup, RelativePath
+from iphone_backup_decrypt import EncryptedBackup, RelativePath, RelativePathsLike
 
 passphrase = "..."  # Or load passphrase more securely from stdin, or a file, etc.
 backup_path = "%AppData%\\Apple Computer\\MobileSync\\Backup\\[device-specific-hash]"
 
 backup = EncryptedBackup(backup_directory=backup_path, passphrase=passphrase)
 
+# Extract the call history SQLite database:
 backup.extract_file(relative_path=RelativePath.CALL_HISTORY, 
                     output_filename="./output/call_history.sqlite")
+
+# Extract all photos from the camera roll:
+backup.extract_files(relative_paths_like=RelativePathsLike.CAMERA_ROLL,
+                     output_folder="./output/camera_roll")
 ```
