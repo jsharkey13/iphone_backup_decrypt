@@ -152,7 +152,6 @@ class EncryptedBackup:
         # Extract the decryption key from the PList data:
         plist = biplist.readPlistFromString(file_bplist)
         file_data = plist['$objects'][plist['$top']['root'].integer]
-        size = file_data['Size']
         protection_class = file_data['ProtectionClass']
         if "EncryptionKey" not in file_data:
             return None  # This file is not encrypted; either a directory or empty.
@@ -164,8 +163,8 @@ class EncryptedBackup:
             encrypted_data = encrypted_file_filehandle.read()
         # Decrypt the file contents:
         decrypted_data = google_iphone_dataprotection.AESdecryptCBC(encrypted_data, inner_key)
-        # Truncate to actual length, as encryption may introduce padding:
-        return decrypted_data[:size]
+        # Remove any padding introduced by the CBC encryption:
+        return google_iphone_dataprotection.removePadding(decrypted_data)
 
     def test_decryption(self):
         """Validate that the backup can be decrypted successfully."""

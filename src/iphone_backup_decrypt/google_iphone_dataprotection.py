@@ -171,3 +171,10 @@ def AESdecryptCBC(data, key, iv=b"\x00" * 16):
         data = data[0:(len(data)/16) * 16]
     data = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv).decrypt(data)
     return data
+
+
+def removePadding(data, blocksize=16):
+    n = int(data[-1])  # RFC 1423: last byte contains number of padding bytes.
+    if n > blocksize or n > len(data):
+        raise Exception('Invalid CBC padding')
+    return data[:-n]
