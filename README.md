@@ -1,6 +1,6 @@
 # iphone-backup-decrypt
 
-Decrypt an encrypted, local (i.e. non-iCloud), iPhone backup created from iOS13.
+Decrypt an encrypted, local (i.e. non-iCloud), iPhone backup created from iOS13 or newer.
 This code is mainly a [wrapper for this StackOverflow answer](https://stackoverflow.com/a/13793043),
 itself based on the [iphone-dataprotection](https://code.google.com/p/iphone-dataprotection/) code.
 
