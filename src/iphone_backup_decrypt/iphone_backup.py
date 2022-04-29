@@ -19,8 +19,11 @@ class RelativePath:
     TEXT_MESSAGES = "Library/SMS/sms.db"
     CALL_HISTORY = "Library/CallHistoryDB/CallHistory.storedata"
     NOTES = "Library/Notes/notes.sqlite"
+    CALENDARS = "Library/Calendar/Calendar.sqlitedb"
     HEALTH = "Health/healthdb.sqlite"
     HEALTH_SECURE = "Health/healthdb_secure.sqlite"
+    SAFARI_HISTORY = "Library/Safari/History.db"
+    SAFARI_BOOKMARKS = "Library/Safari/Bookmarks.db"
 
     # Very common external files:
     WHATSAPP_MESSAGES = "ChatStorage.sqlite"
@@ -34,9 +37,11 @@ class RelativePathsLike:
     CAMERA_ROLL = "Media/DCIM/%APPLE/IMG%.%"
     SMS_ATTACHMENTS = "Library/SMS/Attachments/%.%"
 
-    # WhatsApp paths, which contain "."s and so must search for ".jpg" and ".mp4" individually:
+    # WhatsApp makes .thumb files for every media item, so maybe specifically extract JPG or MP4:
     WHATSAPP_ATTACHED_IMAGES = "Message/Media/%.jpg"
     WHATSAPP_ATTACHED_VIDEOS = "Message/Media/%.mp4"
+    # But allow full export if desired:
+    WHATSAPP_ATTACHMENTS = "Message/Media/%.%"
 
 
 # Based on https://stackoverflow.com/questions/1498342/how-to-decrypt-an-encrypted-apple-itunes-iphone-backup
