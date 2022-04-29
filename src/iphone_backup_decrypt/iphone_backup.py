@@ -204,6 +204,7 @@ class EncryptedBackup:
                 SELECT fileID, file
                 FROM Files
                 WHERE relativePath = ?
+                AND flags=1
                 ORDER BY domain, relativePath
                 LIMIT 1;
             """
@@ -266,6 +267,7 @@ class EncryptedBackup:
                 SELECT fileID, relativePath, file
                 FROM Files
                 WHERE relativePath LIKE ?
+                AND flags=1
                 ORDER BY domain, relativePath;
             """
             cur.execute(query, (relative_paths_like,))
