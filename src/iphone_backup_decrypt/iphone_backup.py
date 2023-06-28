@@ -282,11 +282,24 @@ class EncryptedBackup:
         # Ensure output destination exists then loop through matches:
         os.makedirs(output_folder, exist_ok=True)
         for file_id, matched_relative_path, file_bplist in results:
-            filename = os.path.basename(matched_relative_path)
-            output_path = os.path.join(output_folder, filename)
+            output_path = os.path.join(output_folder, matched_relative_path).replace("/","\\") # assumes Windows convention
+            # Reconstruct path to avoid invalid path errors, replacing forbidden characters when encountered
+            output_path_elements = output_path.split(":",1)
+            output_path = output_path_elements[0] + ":" + output_path_elements[1].replace(":","-")
+            output_path = output_path.replace("*","-")
+            output_path = output_path.replace("|","-")
+            output_path = output_path.replace("?","-")
+            output_path = output_path.replace("\"","-")
+            output_path = output_path.replace("<","-")
+            output_path = output_path.replace(">","-")
+            # Make directories if they don't already exist
+            output_path_parent = output_path.rsplit("\\", 1)[0]
+            if not os.path.exists(output_path_parent): 
+                os.makedirs(output_path_parent)
             # Decrypt the file:
             decrypted_data = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
             # Output to disk:
             if decrypted_data is not None:
                 with open(output_path, 'wb') as outfile:
                     outfile.write(decrypted_data)
+                print("Saved:", output_path)
