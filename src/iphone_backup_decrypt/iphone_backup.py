@@ -1,4 +1,8 @@
+if __name__ == "__main__":
+    raise Exception("This script must be imported and used as a package, not run directly. Enter the parent directory (src) and use `from iphone_backup_decrypt import EncryptedBackup, RelativePath, RelativePathsLike`")
+
 import os.path
+import platform
 import shutil
 import sqlite3
 import struct
@@ -245,7 +249,7 @@ class EncryptedBackup:
             with open(output_filename, 'wb') as outfile:
                 outfile.write(decrypted_data)
 
-    def extract_files(self, *, relative_paths_like, output_folder):
+    def extract_files(self, *, relative_paths_like, output_folder, verbose = True):
         """
         Decrypt files matching a relative path query and output them to a folder.
 
@@ -279,27 +283,35 @@ class EncryptedBackup:
             results = cur.fetchall()
         except sqlite3.Error:
             return None
+        # Determine the path convention based on platform:
+        current_platform = platform.system()
+        use_backslash = True if current_platform == "Windows" else False
         # Ensure output destination exists then loop through matches:
         os.makedirs(output_folder, exist_ok=True)
+        forbidden_characters = ["*", "|", "?", "\"", "\'", "<", ">"]
         for file_id, matched_relative_path, file_bplist in results:
-            output_path = os.path.join(output_folder, matched_relative_path).replace("/","\\") # assumes Windows convention
-            # Reconstruct path to avoid invalid path errors, replacing forbidden characters when encountered
-            output_path_elements = output_path.split(":",1)
-            output_path = output_path_elements[0] + ":" + output_path_elements[1].replace(":","-")
-            output_path = output_path.replace("*","-")
-            output_path = output_path.replace("|","-")
-            output_path = output_path.replace("?","-")
-            output_path = output_path.replace("\"","-")
-            output_path = output_path.replace("<","-")
-            output_path = output_path.replace(">","-")
+            output_path = os.path.join(output_folder, matched_relative_path)
+            if use_backslash:
+                output_path = output_path.replace("/", "\\")  # Windows convention
+                # Remove non-drive colons, as they are invalid in paths
+                output_path_elements = output_path.split(":", 1)
+                output_path = output_path_elements[0] + ":" + output_path_elements[1].replace(":", "-") # handling to preserve drive colon (e.g. C:)
+            else:
+                output_path = output_path.replace(":", "-")
+            # Replace forbidden characters in paths if they exist
+            for forbidden_char in forbidden_characters:
+                output_path = output_path.replace(forbidden_char, "-")
             # Make directories if they don't already exist
-            output_path_parent = output_path.rsplit("\\", 1)[0]
+            output_path_parent = output_path.rsplit("\\", 1)[0] if use_backslash else output_path.rsplit("/", 1)[0]
             if not os.path.exists(output_path_parent): 
                 os.makedirs(output_path_parent)
-            # Decrypt the file:
-            decrypted_data = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
-            # Output to disk:
-            if decrypted_data is not None:
-                with open(output_path, 'wb') as outfile:
-                    outfile.write(decrypted_data)
-                print("Saved:", output_path)
+            # Decrypt the file if it doesn't already exist; allows repeating operation without starting from scratch in case of crashes
+            if not os.path.isfile(output_path):
+                decrypted_data = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
+                # Output to disk:
+                if decrypted_data is not None:
+                    with open(output_path, 'wb') as outfile:
+                        outfile.write(decrypted_data)
+                    print("Saved:", output_path) if verbose else None
+            else:
+                print("Already exists:", output_path) if verbose else None
