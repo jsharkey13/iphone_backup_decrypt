@@ -47,9 +47,12 @@ A minimal example to decrypt and extract some files might look like:
 from iphone_backup_decrypt import EncryptedBackup, RelativePath, RelativePathsLike
 
 passphrase = "..."  # Or load passphrase more securely from stdin, or a file, etc.
-backup_path = "%AppData%\\Apple Computer\\MobileSync\\Backup\\[device-specific-hash]"
+backup_path = "%AppData%\\Apple Computer\\MobileSync\\Backup\\[device-specific-hash]" # use backslashes for Windows or forward slashes for Mac/Linux
 
 backup = EncryptedBackup(backup_directory=backup_path, passphrase=passphrase)
+
+# Extract entire file contents while preserving relative paths
+backup.extract_files(relative_paths_like="%", output_folder="./output")
 
 # Extract the call history SQLite database:
 backup.extract_file(relative_path=RelativePath.CALL_HISTORY, 
