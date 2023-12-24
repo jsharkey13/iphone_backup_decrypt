@@ -1,16 +1,18 @@
 [project]
 name = "iphone_backup_decrypt"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
   { name="James Sharkey" },
 ]
-description = "Decrypt an iOS13+ encrypted local backup."
+description = "Decrypt and extract files from an iOS13+ encrypted local backup."
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Security :: Cryptography"
 ]
+
+keywords = ["iPhone", "backup", "forensics", "iOS", "WhatsApp", "decryption", "iOS backup", "iTunes Backup"]
 
 dependencies = [
     "biplist>=1.0.3",

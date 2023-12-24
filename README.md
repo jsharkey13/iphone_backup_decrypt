@@ -6,7 +6,7 @@ itself based on the [iphone-dataprotection](https://code.google.com/p/iphone-dat
 
 ## Install
 
-Requires [Python 3.4](https://www.python.org/) or higher.
+Requires [Python 3.8](https://www.python.org/) or higher.
 
 The code requires a cryptographic library providing the `Crypto` name. 
 Use `pycryptodome` (but note that this clashes with `pycrypto`, if that is already installed).
@@ -15,19 +15,9 @@ The backup decryption keys are protected using 10 million rounds of PBKDF2 with 
 To speed up decryption, `fastpbkdf2` is desirable; otherwise the code will fall back to using standard library functions.
 The fallback is much slower, but does not require the complicated build and install of `fastpbkdf2`.
 
-Ideal dependencies:
+Install via `pip`:
 ```shell script
-pip install biplist pycryptodome fastpbkdf2
-```
-
-Minimal required dependencies (automatically installed):
-```shell script
-pip install biplist pycryptodome
-```
-
-Install directly from GitHub via `pip`:
-```shell script
-pip install git+https://github.com/jsharkey13/iphone_backup_decrypt
+pip install iphone_backup_decrypt
 # Optionally:
 pip install fastpbkdf2
 ```
