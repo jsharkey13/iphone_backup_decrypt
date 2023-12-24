@@ -1,0 +1,28 @@
+[project]
+name = "iphone_backup_decrypt"
+version = "0.3.0"
+authors = [
+  { name="James Sharkey" },
+]
+description = "Decrypt an iOS13+ encrypted local backup."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Security :: Cryptography"
+]
+
+dependencies = [
+    "biplist>=1.0.3",
+    "pycryptodome>=3.9.1"
+]
+
+[project.optional-dependencies]
+fastpbkdf2 = ["fastpbkdf2>=0.2"]
+
+[project.urls]
+Homepage = "https://github.com/jsharkey13/iphone_backup_decrypt"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
