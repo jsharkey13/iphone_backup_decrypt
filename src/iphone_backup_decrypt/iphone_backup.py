@@ -169,7 +169,10 @@ class EncryptedBackup:
         # Decrypt the file contents:
         decrypted_data = google_iphone_dataprotection.AESdecryptCBC(encrypted_data, inner_key)
         # Remove any padding introduced by the CBC encryption:
-        return google_iphone_dataprotection.removePadding(decrypted_data)
+        file_bytes = google_iphone_dataprotection.removePadding(decrypted_data)
+        # Extract last modified time:
+        file_mtime = file_data.get("LastModified")
+        return file_bytes, file_mtime
 
     def test_decryption(self):
         """Validate that the backup can be decrypted successfully."""
@@ -188,16 +191,7 @@ class EncryptedBackup:
             os.makedirs(output_directory, exist_ok=True)
         shutil.copy(self._temp_decrypted_manifest_db_path, output_filename)
 
-    def extract_file_as_bytes(self, relative_path):
-        """
-        Decrypt a single named file and return the bytes.
-
-        :param relative_path:
-            The iOS 'relativePath' of the file to be decrypted. Common relative paths are provided by the
-            'RelativePath' class, otherwise these can be found by opening the decrypted Manifest.db file
-            and examining the Files table.
-        :return: decrypted bytes of the file.
-        """
+    def _file_as_bytes(self, relative_path):
         # Ensure that we've initialised everything:
         if self._temp_manifest_db_conn is None:
             self._decrypt_manifest_db_file()
@@ -221,6 +215,19 @@ class EncryptedBackup:
         # Decrypt the requested file:
         return self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
 
+    def extract_file_as_bytes(self, relative_path):
+        """
+        Decrypt a single named file and return the bytes.
+
+        :param relative_path:
+            The iOS 'relativePath' of the file to be decrypted. Common relative paths are provided by the
+            'RelativePath' class, otherwise these can be found by opening the decrypted Manifest.db file
+            and examining the Files table.
+        :return: decrypted bytes of the file.
+        """
+        file_bytes, _file_mtime = self._file_as_bytes(relative_path)
+        return file_bytes
+
     def extract_file(self, *, relative_path, output_filename):
         """
         Decrypt a single named file and save it to disk.
@@ -236,14 +243,17 @@ class EncryptedBackup:
             The filename to write the decrypted file contents to.
         """
         # Get the decrypted bytes of the requested file:
-        decrypted_data = self.extract_file_as_bytes(relative_path)
+        file_bytes, file_mtime = self._file_as_bytes(relative_path)
         # Output them to disk:
         output_directory = os.path.dirname(output_filename)
         if output_directory:
             os.makedirs(output_directory, exist_ok=True)
-        if decrypted_data is not None:
+        if file_bytes is not None:
             with open(output_filename, 'wb') as outfile:
-                outfile.write(decrypted_data)
+                outfile.write(file_bytes)
+            # Update the file mtime data:
+            if file_mtime:
+                os.utime(output_filename, times=(file_mtime, file_mtime))
 
     def extract_files(self, *, relative_paths_like, output_folder, preserve_folders=False):
         """
@@ -295,8 +305,11 @@ class EncryptedBackup:
                 filename = os.path.basename(matched_relative_path)
                 output_file_path = os.path.join(output_folder, filename)
             # Decrypt the file:
-            decrypted_data = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
+            file_bytes, file_mtime = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
             # Output to disk:
-            if decrypted_data is not None:
+            if file_bytes is not None:
                 with open(output_file_path, 'wb') as outfile:
-                    outfile.write(decrypted_data)
+                    outfile.write(file_bytes)
+                # Update the file mtime data:
+                if file_mtime:
+                    os.utime(output_file_path, times=(file_mtime, file_mtime))
