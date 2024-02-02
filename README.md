@@ -53,7 +53,7 @@ backup.extract_files(relative_paths_like=RelativePathsLike.CAMERA_ROLL,
 backup.extract_file(relative_path=RelativePath.WHATSAPP_MESSAGES,
                     output_filename="./output/whatsapp.sqlite")
 backup.extract_files(relative_paths_like=RelativePathsLike.WHATSAPP_ATTACHMENTS,
-                     output_folder="./output/whatsapp")
+                     output_folder="./output/whatsapp", preserve_folders=False)
 ```
 
 ## Alternatives
