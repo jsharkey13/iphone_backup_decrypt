@@ -282,11 +282,13 @@ class EncryptedBackup:
         # Ensure output destination exists then loop through matches:
         os.makedirs(output_folder, exist_ok=True)
         for file_id, matched_relative_path, file_bplist in results:
-            filename = os.path.basename(matched_relative_path)
-            output_path = os.path.join(output_folder, filename)
+            matched_relative_folder = os.path.dirname(matched_relative_path)
+            output_folder_path = os.path.join(output_folder, matched_relative_folder)
+            os.makedirs(output_folder_path, exist_ok=True)
+            output_file_path = os.path.join(output_folder, matched_relative_path)
             # Decrypt the file:
             decrypted_data = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
             # Output to disk:
             if decrypted_data is not None:
-                with open(output_path, 'wb') as outfile:
+                with open(output_file_path, 'wb') as outfile:
                     outfile.write(decrypted_data)
