@@ -271,7 +271,7 @@ class EncryptedBackup:
             query = """
                 SELECT fileID, relativePath, file
                 FROM Files
-                WHERE domain LIKE ?
+                WHERE relativePath LIKE ?
                 AND flags=1
                 ORDER BY domain, relativePath;
             """
