@@ -55,3 +55,13 @@ backup.extract_file(relative_path=RelativePath.WHATSAPP_MESSAGES,
 backup.extract_files(relative_paths_like=RelativePathsLike.WHATSAPP_ATTACHMENTS,
                      output_folder="./output/whatsapp")
 ```
+
+## Alternatives
+
+This library aims to be minimal, providing only what is necessary to extract encrypted files. There are alternatives which claim to offer similar or more advanced functionality:
+
+ - [KnugiHK/iphone_backup_decrypt](https://github.com/KnugiHK/iphone_backup_decrypt/tree/master), a fork of this library and part of [Whatsapp-Chat-Exporter](https://github.com/KnugiHK/Whatsapp-Chat-Exporter).
+ - [jfarley248/iTunes_Backup_Reader](https://github.com/jfarley248/iTunes_Backup_Reader), which uses an older version of this library.
+ - [datatags/mount-ios-backup](https://github.com/datatags/mount-ios-backup), which uses an older version of this library.
+ - [avibrazil/iOSbackup](https://github.com/avibrazil/iOSbackup) a similar Python library with a friendlier interface for exploring a backup.
+ - [MaxiHuHe04/iTunes-Backup-Explorer](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer), a Java based alternative with a GUI.
