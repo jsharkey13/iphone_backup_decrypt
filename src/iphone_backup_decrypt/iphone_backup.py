@@ -245,7 +245,7 @@ class EncryptedBackup:
             with open(output_filename, 'wb') as outfile:
                 outfile.write(decrypted_data)
 
-    def extract_files(self, *, relative_paths_like, output_folder):
+    def extract_files(self, *, relative_paths_like, output_folder, preserve_folders=False):
         """
         Decrypt files matching a relative path query and output them to a folder.
 
@@ -260,6 +260,10 @@ class EncryptedBackup:
         :param output_folder:
             The folder to write output files into. Files will be named with their internal iOS filenames and will
             overwrite anything in the output folder with that name.
+        :param preserve_folders:
+            If True, preserve any folder structure present in matched files, creating subdirectories of
+            output_folder as necessary. If not provided or False, file paths will be flattened to the
+            single output_folder, which may not preserve duplicate matched filenames.
         """
         # Ensure that we've initialised everything:
         if self._temp_manifest_db_conn is None:
@@ -282,10 +286,14 @@ class EncryptedBackup:
         # Ensure output destination exists then loop through matches:
         os.makedirs(output_folder, exist_ok=True)
         for file_id, matched_relative_path, file_bplist in results:
-            matched_relative_folder = os.path.dirname(matched_relative_path)
-            output_folder_path = os.path.join(output_folder, matched_relative_folder)
-            os.makedirs(output_folder_path, exist_ok=True)
-            output_file_path = os.path.join(output_folder, matched_relative_path)
+            if preserve_folders:
+                matched_relative_folder = os.path.dirname(matched_relative_path)
+                output_folder_path = os.path.join(output_folder, matched_relative_folder)
+                os.makedirs(output_folder_path, exist_ok=True)
+                output_file_path = os.path.join(output_folder, matched_relative_path)
+            else:
+                filename = os.path.basename(matched_relative_path)
+                output_file_path = os.path.join(output_folder, filename)
             # Decrypt the file:
             decrypted_data = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
             # Output to disk:
