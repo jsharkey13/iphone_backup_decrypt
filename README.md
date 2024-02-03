@@ -29,12 +29,14 @@ This code decrypts the backup using the passphrase chosen when encrypted backups
 The `relativePath` of the file(s) to be decrypted also needs to be known.
 Very common files, like those for the call history or text message databases, can be found in the `RelativePath` class: e.g. use `RelativePath.CALL_HISTORY` instead of the full `Library/CallHistoryDB/CallHistory.storedata`.
 
+More complex matching, particularly for non-unique filenames, may require specifying the `domain` of the files. The `DomainLike` and `MatchFiles` classes contain common domains and domain-path pairings. 
+
 If the relative path is not known, you can manually open the `Manifest.db` SQLite database and explore the `Files` table to find those of interest.
 After creating the class, use the `EncryptedBackup.save_manifest_file(...)` method to store a decrypted version.
 
 A minimal example to decrypt and extract some files might look like:
 ```python
-from iphone_backup_decrypt import EncryptedBackup, RelativePath, RelativePathsLike
+from iphone_backup_decrypt import EncryptedBackup, RelativePath, MatchFiles
 
 passphrase = "..."  # Or load passphrase more securely from stdin, or a file, etc.
 backup_path = "%AppData%\\Apple Computer\\MobileSync\\Backup\\[device-specific-hash]"
@@ -45,15 +47,17 @@ backup = EncryptedBackup(backup_directory=backup_path, passphrase=passphrase)
 backup.extract_file(relative_path=RelativePath.CALL_HISTORY, 
                     output_filename="./output/call_history.sqlite")
 
-# Extract all photos from the camera roll:
-backup.extract_files(relative_paths_like=RelativePathsLike.CAMERA_ROLL,
-                     output_folder="./output/camera_roll")
+# Extract the camera roll, using MatchFiles for combined path and domain matching:
+backup.extract_files(**MatchFiles.CAMERA_ROLL, output_folder="./output/camera_roll")
 
 # Extract WhatsApp SQLite database and attachments:
 backup.extract_file(relative_path=RelativePath.WHATSAPP_MESSAGES,
                     output_filename="./output/whatsapp.sqlite")
-backup.extract_files(relative_paths_like=RelativePathsLike.WHATSAPP_ATTACHMENTS,
+backup.extract_files(**MatchFiles.WHATSAPP_ATTACHMENTS,
                      output_folder="./output/whatsapp", preserve_folders=False)
+
+# Extract Strava workouts:
+backup.extract_files(**MatchFiles.STRAVA_WORKOUTS, output_folder="./output")
 ```
 
 ## Alternatives
