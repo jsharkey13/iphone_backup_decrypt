@@ -83,7 +83,7 @@ class EncryptedBackup:
 
     def __init__(self, *, backup_directory, passphrase):
         """
-        Decrypt an iOS 13 encrypted backup using the passphrase chosen in iTunes.
+        Decrypt an iOS encrypted backup using the passphrase chosen in iTunes.
 
         The passphrase and decryption keys will be stored in memory whilst using this code,
         and a temporary decrypted copy of the Manifest database containing a list of all files
@@ -144,7 +144,7 @@ class EncryptedBackup:
         self._unlocked = self._keybag.unlockWithPassphrase(self._passphrase)
         if not self._unlocked:
             raise ValueError("Failed to decrypt keys: incorrect passphrase?")
-        # No need to keep the passphrase any more:
+        # No need to keep the passphrase anymore:
         self._passphrase = None
         return True
 
