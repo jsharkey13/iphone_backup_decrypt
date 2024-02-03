@@ -191,7 +191,10 @@ class EncryptedBackup:
             os.makedirs(output_directory, exist_ok=True)
         shutil.copy(self._temp_decrypted_manifest_db_path, output_filename)
 
-    def _file_as_bytes(self, relative_path):
+    def _file_as_bytes(self, relative_path, domain_like=None):
+        # Check arguments:
+        if relative_path is None:
+            raise ValueError("A relative_path must be provided!")
         # Ensure that we've initialised everything:
         if self._temp_manifest_db_conn is None:
             self._decrypt_manifest_db_file()
@@ -199,23 +202,28 @@ class EncryptedBackup:
         # The metadata is contained in the 'file' column, as a binary PList file:
         try:
             cur = self._temp_manifest_db_conn.cursor()
+            if domain_like is None:
+                domain_like = "%"
             query = """
                 SELECT fileID, file
                 FROM Files
                 WHERE relativePath = ?
+                AND domain LIKE ?
                 AND flags=1
                 ORDER BY domain, relativePath
                 LIMIT 1;
             """
-            cur.execute(query, (relative_path,))
+            cur.execute(query, (relative_path, domain_like))
             result = cur.fetchone()
-        except sqlite3.Error:
-            return None
+        except sqlite3.Error as e:
+            raise RuntimeError("Error querying Manifest database!") from e
+        if not result:
+            raise FileNotFoundError
         file_id, file_bplist = result
         # Decrypt the requested file:
         return self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
 
-    def extract_file_as_bytes(self, relative_path):
+    def extract_file_as_bytes(self, relative_path, *, domain_like=None):
         """
         Decrypt a single named file and return the bytes.
 
@@ -223,12 +231,17 @@ class EncryptedBackup:
             The iOS 'relativePath' of the file to be decrypted. Common relative paths are provided by the
             'RelativePath' class, otherwise these can be found by opening the decrypted Manifest.db file
             and examining the Files table.
+        :param domain_like:
+            Optional. The iOS 'domain' for the file to be decrypted, containing '%' or '_' SQL LIKE wildcards.
+            If 'relative_path' is not globally unique, a domain can be provided to restrict matching.
+            Common domain wildcards are provided by the 'DomainLike' class, otherwise these can be found by opening the
+            decrypted Manifest.db file and examining the Files table.
         :return: decrypted bytes of the file.
         """
-        file_bytes, _file_mtime = self._file_as_bytes(relative_path)
+        file_bytes, _file_mtime = self._file_as_bytes(relative_path, domain_like)
         return file_bytes
 
-    def extract_file(self, *, relative_path, output_filename):
+    def extract_file(self, *, relative_path, domain_like=None, output_filename):
         """
         Decrypt a single named file and save it to disk.
 
@@ -239,11 +252,16 @@ class EncryptedBackup:
             The iOS 'relativePath' of the file to be decrypted. Common relative paths are provided by the
             'RelativePath' class, otherwise these can be found by opening the decrypted Manifest.db file
             and examining the Files table.
+        :param domain_like:
+            Optional. The iOS 'domain' for the file to be decrypted, containing '%' or '_' SQL LIKE wildcards.
+            If 'relative_path' is not globally unique, a domain can be provided to restrict matching.
+            Common domain wildcards are provided by the 'DomainLike' class, otherwise these can be found by opening the
+            decrypted Manifest.db file and examining the Files table.
         :param output_filename:
             The filename to write the decrypted file contents to.
         """
         # Get the decrypted bytes of the requested file:
-        file_bytes, file_mtime = self._file_as_bytes(relative_path)
+        file_bytes, file_mtime = self._file_as_bytes(relative_path, domain_like)
         # Output them to disk:
         output_directory = os.path.dirname(output_filename)
         if output_directory:
@@ -255,55 +273,82 @@ class EncryptedBackup:
             if file_mtime:
                 os.utime(output_filename, times=(file_mtime, file_mtime))
 
-    def extract_files(self, *, relative_paths_like, output_folder, preserve_folders=False):
+    def extract_files(self, *, relative_paths_like, domain_like=None, output_folder,
+                      preserve_folders=False, domain_subfolders=False):
         """
         Decrypt files matching a relative path query and output them to a folder.
 
-        This method is not really designed to match very loose relative paths like '%' or '%.jpg'.
-        Since the folder structure is not preserved, files may be overwritten and/or unclear in origin.
-        Use very generic relative path matching at your own risk.
+        This method is not really designed to match very loose relative paths like '%' or '%.jpg',
+        but using 'preserve_folders' and 'domain_subfolders' may mitigate this.
 
         :param relative_paths_like:
             An iOS 'relativePath' of the files to be decrypted, containing '%' or '_' SQL LIKE wildcards.
             Common relative path wildcards are provided by the 'RelativePathsLike' class, otherwise these can be found
             by opening the decrypted Manifest.db file and examining the Files table.
+        :param domain_like:
+            Optional. An iOS 'domain' for the files to be decrypted, containing '%' or '_' SQL LIKE wildcards.
+            If a domain is provided, only files from that domain will be extracted, which can be useful for non-unique
+            relative paths.
+            Common domain wildcards are provided by the 'DomainLike' class, otherwise these can be found by opening the
+            decrypted Manifest.db file and examining the Files table.
         :param output_folder:
             The folder to write output files into. Files will be named with their internal iOS filenames and will
             overwrite anything in the output folder with that name.
         :param preserve_folders:
-            If True, preserve any folder structure present in matched files, creating subdirectories of
+            If True, preserve any folder structure present in matched files, creating subfolders of
             output_folder as necessary. If not provided or False, file paths will be flattened to the
             single output_folder, which may not preserve duplicate matched filenames.
+        :param domain_subfolders:
+            If True, extracted files will be split into domain subfolders inside output_folder. This can be useful when
+            extracting multiple domains which may have files with identical internal iOS filenames.
+            If preserve_folders is also True, the folder structure will appear underneath the domain subfolder.
+            If not provided or False, files from different domains will not be separated.
         """
         # Ensure that we've initialised everything:
         if self._temp_manifest_db_conn is None:
             self._decrypt_manifest_db_file()
+        # Check the provided arguments and replace missing ones with wildcards:
+        if relative_paths_like is None and domain_like is None:
+            # If someone _really_ wants to try and extract everything, then setting both to '%' should be enough.
+            raise ValueError("At least one of 'relative_paths_like' or 'domain_like' must be specified!")
+        elif relative_paths_like is None and domain_like is not None:
+            relative_paths_like = "%"
+        elif relative_paths_like is not None and domain_like is None:
+            domain_like = "%"
         # Use Manifest.db to find the on-disk filename(s) and file metadata, including the keys, for the file(s).
-        # The metadata is contained in the 'file' column, as a binary PList file; the filename in 'relativePath':
+        # The metadata is contained in the 'file' column, as a binary PList file.
         try:
             cur = self._temp_manifest_db_conn.cursor()
             query = """
-                SELECT fileID, relativePath, file
+                SELECT fileID, domain, relativePath, file
                 FROM Files
                 WHERE relativePath LIKE ?
+                AND domain LIKE ?
                 AND flags=1
                 ORDER BY domain, relativePath;
             """
-            cur.execute(query, (relative_paths_like,))
+            cur.execute(query, (relative_paths_like, domain_like))
             results = cur.fetchall()
-        except sqlite3.Error:
-            return None
+        except sqlite3.Error as e:
+            raise RuntimeError("Error querying Manifest database!") from e
         # Ensure output destination exists then loop through matches:
         os.makedirs(output_folder, exist_ok=True)
-        for file_id, matched_relative_path, file_bplist in results:
+        for file_id, domain, matched_relative_path, file_bplist in results:
+            # Do we need to create a subfolder for this file's domain?
+            if domain_subfolders:
+                subfolder = os.path.join(output_folder, domain)
+                os.makedirs(subfolder, exist_ok=True)
+            else:
+                subfolder = output_folder
+            # Do we need to preserve folders from the relativePath?
             if preserve_folders:
                 matched_relative_folder = os.path.dirname(matched_relative_path)
-                output_folder_path = os.path.join(output_folder, matched_relative_folder)
+                output_folder_path = os.path.join(subfolder, matched_relative_folder)
                 os.makedirs(output_folder_path, exist_ok=True)
-                output_file_path = os.path.join(output_folder, matched_relative_path)
+                output_file_path = os.path.join(subfolder, matched_relative_path)
             else:
                 filename = os.path.basename(matched_relative_path)
-                output_file_path = os.path.join(output_folder, filename)
+                output_file_path = os.path.join(subfolder, filename)
             # Decrypt the file:
             file_bytes, file_mtime = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
             # Output to disk:
