@@ -10,12 +10,19 @@ import struct
 from binascii import hexlify
 
 import Crypto.Cipher.AES
+import Crypto.Hash
+import Crypto.Protocol.KDF
 
 try:
-    from fastpbkdf2 import pbkdf2_hmac  # Prefer a fast, C++ implementation;
+    # Prefer a fast, pure C++ implementation:
+    from fastpbkdf2 import pbkdf2_hmac
 except ImportError:
-    from hashlib import pbkdf2_hmac  # but settle for a standard library one if necessary!
+    # Otherwise, use pycryptodome - wrapping it to look like the standard library method signature.
+    # It is 2-3x faster than the standard library 'hashlib.pbkdf2_hmac' method, but still 2x slower than fastpbkdf2.
+    HASH_FNS = {"sha1": Crypto.Hash.SHA1, "sha256": Crypto.Hash.SHA256}
 
+    def pbkdf2_hmac(hash_name, password, salt, iterations, dklen=None):
+        return Crypto.Protocol.KDF.PBKDF2(password, salt, dklen, iterations, hmac_hash_module=HASH_FNS[hash_name])
 
 __all__ = ["Keybag", "AESdecryptCBC"]
 

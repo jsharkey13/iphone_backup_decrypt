@@ -8,12 +8,9 @@ itself based on the [iphone-dataprotection](https://code.google.com/p/iphone-dat
 
 Requires [Python 3.8](https://www.python.org/) or higher.
 
-The code requires a cryptographic library providing the `Crypto` name. 
-Use `pycryptodome` (but note that this clashes with `pycrypto`, if that is already installed).
-
 The backup decryption keys are protected using 10 million rounds of PBKDF2 with SHA256, then 10 thousand further iterations of PBKDF2 with SHA-1.
-To speed up decryption, `fastpbkdf2` is desirable; otherwise the code will fall back to using standard library functions.
-The fallback is much slower, but does not require the complicated build and install of `fastpbkdf2`.
+To speed up decryption, `fastpbkdf2` is desirable; otherwise the code will fall back to using `pycryptodome`'s implementation.
+The fallback is ~50% slower at the initial backup decryption step, but does not require the complicated build and install of `fastpbkdf2`.
 
 Install via `pip`:
 ```shell script
