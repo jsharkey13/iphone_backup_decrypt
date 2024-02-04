@@ -24,7 +24,8 @@ except ImportError:
     def pbkdf2_hmac(hash_name, password, salt, iterations, dklen=None):
         return Crypto.Protocol.KDF.PBKDF2(password, salt, dklen, iterations, hmac_hash_module=HASH_FNS[hash_name])
 
-__all__ = ["Keybag", "AESdecryptCBC"]
+
+__all__ = ["Keybag", "AESdecryptCBC", "removePadding"]
 
 
 _CLASSKEY_TAGS = [b"CLAS", b"WRAP", b"WPKY", b"KTYP", b"PBKY"]  # UUID

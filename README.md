@@ -54,7 +54,7 @@ backup.extract_files(**MatchFiles.WHATSAPP_ATTACHMENTS,
                      output_folder="./output/whatsapp", preserve_folders=False)
 
 # Extract Strava workouts:
-backup.extract_files(**MatchFiles.STRAVA_WORKOUTS, output_folder="./output")
+backup.extract_files(**MatchFiles.STRAVA_WORKOUTS, output_folder="./output/strava")
 ```
 
 ## Alternatives
