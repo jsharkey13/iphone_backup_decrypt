@@ -269,6 +269,7 @@ class EncryptedBackup:
             If 'relative_path' is not globally unique, a domain can be provided to restrict matching.
             Common domain wildcards are provided by the 'DomainLike' class, otherwise these can be found by opening the
             decrypted Manifest.db file and examining the Files table.
+
         :return: decrypted bytes of the file.
         """
         file_bytes, _file_mtime = self._file_as_bytes(relative_path, domain_like)
@@ -336,6 +337,10 @@ class EncryptedBackup:
             extracting multiple domains which may have files with identical internal iOS filenames.
             If preserve_folders is also True, the folder structure will appear underneath the domain subfolder.
             If not provided or False, files from different domains will not be separated.
+
+        :return: number of files extracted.
+            If this number does not match the number of files created on disk, then some duplicate filenames may have
+            been overwritten.
         """
         # Ensure that we've initialised everything:
         if self._temp_manifest_db_conn is None:
@@ -366,6 +371,7 @@ class EncryptedBackup:
             raise RuntimeError("Error querying Manifest database!") from e
         # Ensure output destination exists then loop through matches:
         os.makedirs(output_folder, exist_ok=True)
+        n_files = 0
         for file_id, domain, matched_relative_path, file_bplist in results:
             # Do we need to create a subfolder for this file's domain?
             if domain_subfolders:
@@ -391,3 +397,6 @@ class EncryptedBackup:
                 # Update the file mtime data:
                 if file_mtime:
                     os.utime(output_file_path, times=(file_mtime, file_mtime))
+                n_files += 1
+        # Return how many files were extracted:
+        return n_files
