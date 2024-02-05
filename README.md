@@ -19,6 +19,14 @@ pip install iphone_backup_decrypt
 pip install fastpbkdf2
 ```
 
+Or if you have Docker, an alternative is to use the pre-built image: `ghcr.io/jsharkey13/iphone_backup_decrypt`. A Command Prompt example might look like: 
+```shell
+docker run --rm -it ^
+    -v "%AppData%/Apple Computer/MobileSync/Backup/[device-specific-hash]":/backup:ro ^
+    -v "%cd%/output":/output ^
+    ghcr.io/jsharkey13/iphone_backup_decrypt
+```
+
 ## Usage
 
 This code decrypts the backup using the passphrase chosen when encrypted backups were enabled in iTunes.
