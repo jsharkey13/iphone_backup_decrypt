@@ -192,7 +192,7 @@ class EncryptedBackup:
         file_data = plist['$objects'][plist['$top']['root'].integer]
         protection_class = file_data['ProtectionClass']
         if "EncryptionKey" not in file_data:
-            return None  # This file is not encrypted; either a directory or empty.
+            raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a directory or empty.
         encryption_key = plist['$objects'][file_data['EncryptionKey'].integer]['NS.data'][4:]
         inner_key = self._keybag.unwrapKeyForClass(protection_class, encryption_key)
         # Find the encrypted version of the file on disk and decrypt it:
@@ -300,12 +300,11 @@ class EncryptedBackup:
         output_directory = os.path.dirname(output_filename)
         if output_directory:
             os.makedirs(output_directory, exist_ok=True)
-        if file_bytes is not None:
-            with open(output_filename, 'wb') as outfile:
-                outfile.write(file_bytes)
-            # Update the file mtime data:
-            if file_mtime:
-                os.utime(output_filename, times=(file_mtime, file_mtime))
+        with open(output_filename, 'wb') as outfile:
+            outfile.write(file_bytes)
+        # Update the file mtime data:
+        if file_mtime:
+            os.utime(output_filename, times=(file_mtime, file_mtime))
 
     def extract_files(self, *, relative_paths_like, domain_like=None, output_folder,
                       preserve_folders=False, domain_subfolders=False):
@@ -391,12 +390,11 @@ class EncryptedBackup:
             # Decrypt the file:
             file_bytes, file_mtime = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
             # Output to disk:
-            if file_bytes is not None:
-                with open(output_file_path, 'wb') as outfile:
-                    outfile.write(file_bytes)
-                # Update the file mtime data:
-                if file_mtime:
-                    os.utime(output_file_path, times=(file_mtime, file_mtime))
-                n_files += 1
+            with open(output_file_path, 'wb') as outfile:
+                outfile.write(file_bytes)
+            # Update the file mtime data:
+            if file_mtime:
+                os.utime(output_file_path, times=(file_mtime, file_mtime))
+            n_files += 1
         # Return how many files were extracted:
         return n_files
