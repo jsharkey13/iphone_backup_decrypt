@@ -307,7 +307,7 @@ class EncryptedBackup:
             os.utime(output_filename, times=(file_mtime, file_mtime))
 
     def extract_files(self, *, relative_paths_like, domain_like=None, output_folder,
-                      preserve_folders=False, domain_subfolders=False):
+                      preserve_folders=False, domain_subfolders=False, incremental=False):
         """
         Decrypt files matching a relative path query and output them to a folder.
 
@@ -336,10 +336,19 @@ class EncryptedBackup:
             extracting multiple domains which may have files with identical internal iOS filenames.
             If preserve_folders is also True, the folder structure will appear underneath the domain subfolder.
             If not provided or False, files from different domains will not be separated.
+        :param incremental:
+            When True, if the file already exists in the output folder it will only be overwritten if  the iOS
+            last modification time is after the local filesystem modification time. This may avoid some disk IO,
+            but the file still needs to be decrypted to access its last modification time, so it is unlikely
+            to affect the speed of extracting files. If files in the output folder are modified after extraction,
+            this may prevent newer versions being extracted from the backup.
+            If False or not provided, files are always written to disk, overwriting any existing files.
 
         :return: number of files extracted.
             If this number does not match the number of files created on disk, then some duplicate filenames may have
-            been overwritten.
+            been overwritten. If 'incremental' enabled and some files already existed in the output folder,
+            the number returned will be the number of files modified or created, excluding those skipped because they
+            had not changed since the last extraction.
         """
         # Ensure that we've initialised everything:
         if self._temp_manifest_db_conn is None:
@@ -389,6 +398,12 @@ class EncryptedBackup:
                 output_file_path = os.path.join(subfolder, filename)
             # Decrypt the file:
             file_bytes, file_mtime = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
+            # Check if file already exists and we are doing an incremental extraction:
+            if os.path.exists(output_file_path) and incremental:
+                existing_mtime = os.path.getmtime(output_file_path)
+                if file_mtime and existing_mtime and file_mtime <= existing_mtime:
+                    # Skip re-writing this file to disk if it has not changed.
+                    continue
             # Output to disk:
             with open(output_file_path, 'wb') as outfile:
                 outfile.write(file_bytes)
