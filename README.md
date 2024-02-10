@@ -1,6 +1,6 @@
 # iphone-backup-decrypt
 
-Decrypt an encrypted, local (i.e. non-iCloud), iPhone backup created from iOS13 or newer.
+Decrypt an encrypted, local iPhone backup created from iOS13 or newer.
 This code is mainly a [wrapper for this StackOverflow answer](https://stackoverflow.com/a/13793043),
 itself based on the [iphone-dataprotection](https://code.google.com/p/iphone-dataprotection/) code.
 
@@ -44,7 +44,8 @@ A minimal example to decrypt and extract some files might look like:
 from iphone_backup_decrypt import EncryptedBackup, RelativePath, MatchFiles
 
 passphrase = "..."  # Or load passphrase more securely from stdin, or a file, etc.
-backup_path = "%AppData%\\Apple Computer\\MobileSync\\Backup\\[device-specific-hash]"
+backup_path = "%AppData%/Apple Computer/MobileSync/Backup/[device-specific-hash]"
+# Or MacOS: "/Users/[user]/Library/Application Support/MobileSync/Backup/[device-hash]"
 
 backup = EncryptedBackup(backup_directory=backup_path, passphrase=passphrase)
 
