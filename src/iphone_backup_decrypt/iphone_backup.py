@@ -184,12 +184,18 @@ class EncryptedBackup:
         if not self._open_temp_database():
             raise ConnectionError("Manifest.db file does not seem to be the right format!")
 
-    def _decrypt_inner_file(self, *, file_id, file_bplist):
+    def _decrypt_inner_file(self, *, file_id, file_bplist, if_modified_since=None):
         # Ensure we've already unlocked the Keybag:
         self._read_and_unlock_keybag()
-        # Extract the decryption key from the PList data:
+        # Read the plist data and extract file metadata:
         plist = biplist.readPlistFromString(file_bplist)
         file_data = plist['$objects'][plist['$top']['root'].integer]
+        file_mtime = file_data.get("LastModified")
+        # Was the file modified since the time requested?
+        if if_modified_since and file_mtime <= if_modified_since:
+            # Skip decryption, since file is unchanged.
+            return None, file_mtime
+        # Extract the decryption key from the PList data:
         protection_class = file_data['ProtectionClass']
         if "EncryptionKey" not in file_data:
             raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a directory or empty.
@@ -203,8 +209,6 @@ class EncryptedBackup:
         decrypted_data = google_iphone_dataprotection.AESdecryptCBC(encrypted_data, inner_key)
         # Remove any padding introduced by the CBC encryption:
         file_bytes = google_iphone_dataprotection.removePadding(decrypted_data)
-        # Extract last modified time:
-        file_mtime = file_data.get("LastModified")
         return file_bytes, file_mtime
 
     def test_decryption(self):
@@ -337,11 +341,11 @@ class EncryptedBackup:
             If preserve_folders is also True, the folder structure will appear underneath the domain subfolder.
             If not provided or False, files from different domains will not be separated.
         :param incremental:
-            When True, if the file already exists in the output folder it will only be overwritten if  the iOS
-            last modification time is after the local filesystem modification time. This may avoid some disk IO,
-            but the file still needs to be decrypted to access its last modification time, so it is unlikely
-            to affect the speed of extracting files. If files in the output folder are modified after extraction,
-            this may prevent newer versions being extracted from the backup.
+            When True, if the file already exists in the output folder it will only be overwritten if the iOS
+            last modification time is after the local filesystem modification time. This may avoid unnecessary
+            disk IO and computation to decrypt the files.
+            Note that if files in the output folder are modified after extraction, it may prevent 'newer' versions
+            being extracted from the backup!
             If False or not provided, files are always written to disk, overwriting any existing files.
 
         :return: number of files extracted.
@@ -396,14 +400,21 @@ class EncryptedBackup:
             else:
                 filename = os.path.basename(matched_relative_path)
                 output_file_path = os.path.join(subfolder, filename)
-            # Decrypt the file:
-            file_bytes, file_mtime = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
             # Check if file already exists and we are doing an incremental extraction:
             if os.path.exists(output_file_path) and incremental:
                 existing_mtime = os.path.getmtime(output_file_path)
-                if file_mtime and existing_mtime and file_mtime <= existing_mtime:
-                    # Skip re-writing this file to disk if it has not changed.
+                # Conditionally decrypt the file, to avoid unnecessary work:
+                file_bytes, file_mtime = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist,
+                                                                  if_modified_since=existing_mtime)
+                if file_bytes is None and file_mtime <= existing_mtime:
+                    # Skip re-writing this file to disk since it has not changed.
                     continue
+                elif file_bytes is None:
+                    # This should not be possible:
+                    raise IOError("Incremental decryption issue; try again with incremental disabled!")
+            else:
+                # Else just decrypt the file:
+                file_bytes, file_mtime = self._decrypt_inner_file(file_id=file_id, file_bplist=file_bplist)
             # Output to disk:
             with open(output_file_path, 'wb') as outfile:
                 outfile.write(file_bytes)
