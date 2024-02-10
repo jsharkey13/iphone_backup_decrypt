@@ -1,10 +1,9 @@
 import os.path
+import plistlib
 import shutil
 import sqlite3
 import struct
 import tempfile
-
-import biplist
 
 from . import google_iphone_dataprotection
 
@@ -138,7 +137,7 @@ class EncryptedBackup:
             return self._unlocked
         # Open the Manifest.plist file to access the Keybag:
         with open(self._manifest_plist_path, 'rb') as infile:
-            self._manifest_plist = biplist.readPlist(infile)
+            self._manifest_plist = plistlib.load(infile)
         self._keybag = google_iphone_dataprotection.Keybag(self._manifest_plist['BackupKeyBag'])
         # Attempt to unlock the Keybag:
         self._unlocked = self._keybag.unlockWithPassphrase(self._passphrase)
@@ -188,8 +187,8 @@ class EncryptedBackup:
         # Ensure we've already unlocked the Keybag:
         self._read_and_unlock_keybag()
         # Read the plist data and extract file metadata:
-        plist = biplist.readPlistFromString(file_bplist)
-        file_data = plist['$objects'][plist['$top']['root'].integer]
+        plist = plistlib.loads(file_bplist)
+        file_data = plist['$objects'][plist['$top']['root'].data]
         file_mtime = file_data.get("LastModified")
         # Was the file modified since the time requested?
         if if_modified_since and file_mtime <= if_modified_since:
@@ -199,7 +198,7 @@ class EncryptedBackup:
         protection_class = file_data['ProtectionClass']
         if "EncryptionKey" not in file_data:
             raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a directory or empty.
-        encryption_key = plist['$objects'][file_data['EncryptionKey'].integer]['NS.data'][4:]
+        encryption_key = plist['$objects'][file_data['EncryptionKey'].data]['NS.data'][4:]
         inner_key = self._keybag.unwrapKeyForClass(protection_class, encryption_key)
         # Find the encrypted version of the file on disk and decrypt it:
         filename_in_backup = os.path.join(self._backup_directory, file_id[:2], file_id)
