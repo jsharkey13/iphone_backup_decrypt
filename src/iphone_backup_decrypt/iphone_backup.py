@@ -7,75 +7,7 @@ import tempfile
 
 from . import google_iphone_dataprotection, utils
 
-__all__ = ["EncryptedBackup", "RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles"]
-
-
-class RelativePath:
-    """Relative paths for commonly accessed files."""
-
-    # Standard iOS file locations:
-    ADDRESS_BOOK = "Library/AddressBook/AddressBook.sqlitedb"
-    TEXT_MESSAGES = "Library/SMS/sms.db"
-    CALL_HISTORY = "Library/CallHistoryDB/CallHistory.storedata"
-    NOTES = "Library/Notes/notes.sqlite"
-    CALENDARS = "Library/Calendar/Calendar.sqlitedb"
-    HEALTH = "Health/healthdb.sqlite"
-    HEALTH_SECURE = "Health/healthdb_secure.sqlite"
-    SAFARI_HISTORY = "Library/Safari/History.db"
-    SAFARI_BOOKMARKS = "Library/Safari/Bookmarks.db"
-
-    # Very common external files:
-    WHATSAPP_MESSAGES = "ChatStorage.sqlite"
-    WHATSAPP_CONTACTS = "ContactsV2.sqlite"
-
-
-class RelativePathsLike:
-    """Relative path wildcards for commonly accessed groups of files."""
-
-    # A wildcard, use at own risk:
-    ALL_FILES = "%"
-
-    # Standard iOS file locations:
-    CAMERA_ROLL = "Media/DCIM/%APPLE/IMG%.%"
-    ICLOUD_PHOTOS = "Media/PhotoData/CPLAssets/group%/%.%"
-    SMS_ATTACHMENTS = "Library/SMS/Attachments/%.%"
-    VOICEMAILS = "Library/Voicemail/%.amr"
-    VOICE_RECORDINGS = "Library/Recordings/%"
-    ICLOUD_LOCAL_FILES = "Library/Mobile Documents/com~apple~CloudDocs/%"
-
-    # WhatsApp makes .thumb files for every media item, so maybe specifically extract JPG or MP4:
-    WHATSAPP_ATTACHED_IMAGES = "Message/Media/%.jpg"
-    WHATSAPP_ATTACHED_VIDEOS = "Message/Media/%.mp4"
-    # But allow full export if desired:
-    WHATSAPP_ATTACHMENTS = "Message/Media/%.%"
-
-
-class DomainLike:
-    """Domain wildcards for commonly accessed apps and services."""
-
-    # Standard iOS domains:
-    HOME_DOMAIN = "HomeDomain"
-    CAMERA_ROLL = "CameraRollDomain"
-    FILES_ON_IPHONE = "AppDomainGroup-group.com.apple.FileProvider.LocalStorage"
-
-    # Third party apps:
-    WHATSAPP = "%net.whatsapp.%"  # WhatsApp has several domains, all with this common section.
-
-
-class MatchFiles:
-    """Paired relative paths and domains for more complex matching.
-
-       Use items from this class with EncryptedBackup.extract_files, e.g:
-           backup.extract_files(**MatchFiles.CAMERA_ROLL, output_folder="./output")
-    """
-
-    CAMERA_ROLL = {"relative_paths_like": RelativePathsLike.CAMERA_ROLL, "domain_like": DomainLike.CAMERA_ROLL}
-    ICLOUD_PHOTOS = {"relative_paths_like": RelativePathsLike.ICLOUD_PHOTOS, "domain_like": DomainLike.CAMERA_ROLL}
-    CHROME_DOWNLOADS = {"relative_paths_like": "Documents/%", "domain_like": "AppDomain-com.google.chrome.ios"}
-    STRAVA_WORKOUTS = {"relative_paths_like": "Documents/%.fit", "domain_like": "AppDomain-com.strava.stravaride"}
-    WHATSAPP_ATTACHMENTS = {"relative_paths_like": RelativePathsLike.WHATSAPP_ATTACHMENTS,
-                            "domain_like": DomainLike.WHATSAPP}
-    WHATSAPP_CONTACT_PHOTOS = {"relative_paths_like": "Media/Profile/%.jpg", "domain_like": DomainLike.WHATSAPP}
+__all__ = ["EncryptedBackup"]
 
 
 # Based on https://stackoverflow.com/questions/1498342/how-to-decrypt-an-encrypted-apple-itunes-iphone-backup
