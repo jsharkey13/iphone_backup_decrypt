@@ -108,7 +108,7 @@ class EncryptedBackup:
         self.decrypted = False
         # Keep track of the backup directory, and more dangerously, keep the backup passphrase as bytes until used:
         self._backup_directory = os.path.expandvars(backup_directory)
-        self._passphrase = passphrase if type(passphrase) is bytes else passphrase.encode("utf-8")
+        self._passphrase = passphrase if isinstance(passphrase, bytes) else passphrase.encode("utf-8")
         # Internals for unlocking the Keybag:
         self._manifest_plist_path = os.path.join(self._backup_directory, 'Manifest.plist')
         self._manifest_plist = None
@@ -131,7 +131,7 @@ class EncryptedBackup:
             shutil.rmtree(self._temporary_folder)
         except Exception:
             print("WARN: Cleanup failed. You may want to delete the decrypted temporary file found at:")
-            print("    '{}'".format(self._temp_decrypted_manifest_db_path))
+            print(f"    '{self._temp_decrypted_manifest_db_path}'")
             raise
 
     def _read_and_unlock_keybag(self):
