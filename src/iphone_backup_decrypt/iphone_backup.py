@@ -4,6 +4,7 @@ import shutil
 import sqlite3
 import struct
 import tempfile
+from contextlib import contextmanager
 
 from . import google_iphone_dataprotection, utils
 
@@ -192,6 +193,28 @@ class EncryptedBackup:
         if output_directory:
             os.makedirs(output_directory, exist_ok=True)
         shutil.copy(self._temp_decrypted_manifest_db_path, output_filename)
+
+    @contextmanager
+    def manifest_db_cursor(self):
+        """Get a cursor into the temporary copy of the Manifest file.
+
+        The cursor is intended only for read-only querying, since the
+        underlying connection object is not returned and will not
+        commit the changes by default.
+
+        Example usage:
+
+        with backup.manifest_db_cursor() as cur:
+            cur.execute("SELECT count(*) FROM Files;")
+            print(cur.fetchone()[0])
+        """
+        # Ensure that we've decrypted the manifest file:
+        self._decrypt_manifest_db_file()
+        # Get and yield a cursor:
+        temp_cur = self._temp_manifest_db_conn.cursor()
+        yield temp_cur
+        # Close it when we're done:
+        temp_cur.close()
 
     def extract_file_as_bytes(self, relative_path, *, domain_like=None):
         """
