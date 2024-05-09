@@ -1,7 +1,7 @@
 # iphone-backup-decrypt
 
 Decrypt an encrypted, local iPhone backup created from iOS13 or newer.
-This code is mainly a [wrapper for this StackOverflow answer](https://stackoverflow.com/a/13793043),
+This code [was based on this StackOverflow answer](https://stackoverflow.com/a/13793043),
 itself based on the [iphone-dataprotection](https://code.google.com/p/iphone-dataprotection/) code.
 
 ## Install
@@ -56,8 +56,8 @@ backup.extract_file(relative_path=RelativePath.CALL_HISTORY,
 # Extract the camera roll, using MatchFiles for combined path and domain matching:
 backup.extract_files(**MatchFiles.CAMERA_ROLL, output_folder="./output/camera_roll")
 
-# Extract iCloud Photos that are stored locally in the backup (there may be some
-# duplication with the camera roll)
+# Extract any iCloud camera roll images on the device (may include thumbnails for some
+# but not all images offloaded to the cloud, and have duplicates from the camera roll):
 backup.extract_files(**MatchFiles.ICLOUD_PHOTOS, output_folder="./output/icloud_photos")
 
 # Extract WhatsApp SQLite database and attachments:
