@@ -56,6 +56,10 @@ backup.extract_file(relative_path=RelativePath.CALL_HISTORY,
 # Extract the camera roll, using MatchFiles for combined path and domain matching:
 backup.extract_files(**MatchFiles.CAMERA_ROLL, output_folder="./output/camera_roll")
 
+# Extract iCloud Photos that are stored locally in the backup (there may be some
+# duplication with the camera roll)
+backup.extract_files(**MatchFiles.ICLOUD_PHOTOS, output_folder="./output/icloud_photos")
+
 # Extract WhatsApp SQLite database and attachments:
 backup.extract_file(relative_path=RelativePath.WHATSAPP_MESSAGES,
                     output_filename="./output/whatsapp.sqlite")

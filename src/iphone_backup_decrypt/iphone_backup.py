@@ -37,6 +37,7 @@ class RelativePathsLike:
 
     # Standard iOS file locations:
     CAMERA_ROLL = "Media/DCIM/%APPLE/IMG%.%"
+    ICLOUD_PHOTOS = "Media/PhotoData/CPLAssets/group%/%.%"
     SMS_ATTACHMENTS = "Library/SMS/Attachments/%.%"
     VOICEMAILS = "Library/Voicemail/%.amr"
     VOICE_RECORDINGS = "Library/Recordings/%"
@@ -69,6 +70,7 @@ class MatchFiles:
     """
 
     CAMERA_ROLL = {"relative_paths_like": RelativePathsLike.CAMERA_ROLL, "domain_like": DomainLike.CAMERA_ROLL}
+    ICLOUD_PHOTOS = {"relative_paths_like": RelativePathsLike.ICLOUD_PHOTOS, "domain_like": DomainLike.CAMERA_ROLL}
     CHROME_DOWNLOADS = {"relative_paths_like": "Documents/%", "domain_like": "AppDomain-com.google.chrome.ios"}
     STRAVA_WORKOUTS = {"relative_paths_like": "Documents/%.fit", "domain_like": "AppDomain-com.strava.stravaride"}
     WHATSAPP_ATTACHMENTS = {"relative_paths_like": RelativePathsLike.WHATSAPP_ATTACHMENTS,
