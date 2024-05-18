@@ -137,7 +137,7 @@ def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
         dec_filehandle.write(dec_data)
     # Check output size:
     if dec_filehandle.tell() != file_plist.filesize:
-        print(f"WARN: decrypted {dec_filehandle.tell()} bytes of '{out_filepath}', expected {file_plist.size} bytes!")
+        print(f"WARN: decrypted {dec_filehandle.tell()} bytes of '{out_filepath}', expected {file_plist.filesize} bytes!")
     # Close filehandles:
     enc_filehandle.close()
     dec_filehandle.close()
