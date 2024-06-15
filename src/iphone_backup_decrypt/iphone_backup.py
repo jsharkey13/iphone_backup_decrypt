@@ -270,7 +270,8 @@ class EncryptedBackup:
         self._decrypt_file_to_disk(file_id=file_id, file_plist=file_plist, key=inner_key, output_filepath=output_filename)
 
     def extract_files(self, *, relative_paths_like, domain_like=None, output_folder,
-                      preserve_folders=False, domain_subfolders=False, incremental=False):
+                      preserve_folders=False, domain_subfolders=False, incremental=False,
+                      filter_callback=None):
         """
         Decrypt files matching a relative path query and output them to a folder.
 
@@ -306,6 +307,21 @@ class EncryptedBackup:
             Note that if files in the output folder are modified after extraction, it may prevent 'newer' versions
             being extracted from the backup!
             If False or not provided, files are always written to disk, overwriting any existing files.
+        :param filter_callback
+            Optional. If it is provided this function will be called before each matching file is decrypted, with
+            metadata about the file. If it returns True, the file will be decrypted; if it returns a false-y value,
+            the file will be skipped. Note that the filtering this callback enables is performed before any
+            filtering caused by the 'incremental' argument and does not override that.
+            This can be used to perform more complex file extraction than wildcard matching by relativePath and domain.
+            The callback can also be used to deduce progress information, since the function is provided with
+            data about the index of the current file and the total number of matched files.
+            An example including the callback function signature (including '**kwargs' is strongly recommended for
+            forwards-compatibility):
+
+                def f(*, n, total_files, relative_path, domain, file_id, **kwargs):
+                    return True
+
+                backup.decrypt_files(..., filter_callback=f)
 
         :return: number of files extracted.
             If this number does not match the number of files created on disk, then some duplicate filenames may have
@@ -324,6 +340,8 @@ class EncryptedBackup:
             relative_paths_like = "%"
         elif relative_paths_like is not None and domain_like is None:
             domain_like = "%"
+        # If the filter function is not provided, default to including everything:
+        _include_fn = filter_callback if callable(filter_callback) else (lambda **kwargs: True)
         # Use Manifest.db to find the on-disk filename(s) and file metadata, including the keys, for the file(s).
         # The metadata is contained in the 'file' column, as a binary PList file.
         try:
@@ -343,7 +361,12 @@ class EncryptedBackup:
         # Ensure output destination exists then loop through matches:
         os.makedirs(output_folder, exist_ok=True)
         n_files = 0
-        for file_id, domain, matched_relative_path, file_bplist in results:
+        total_files = len(results)
+        for n, (file_id, domain, matched_relative_path, file_bplist) in enumerate(results):
+            # Include this file?
+            if not _include_fn(file_id=file_id, domain=domain, relative_path=matched_relative_path,
+                               n=n, total_files=total_files):
+                continue
             # Build the output file path:
             _output_path = [output_folder]
             if domain_subfolders:
