@@ -269,7 +269,7 @@ class EncryptedBackup:
         # Decrypt the requested file:
         self._decrypt_file_to_disk(file_id=file_id, file_plist=file_plist, key=inner_key, output_filepath=output_filename)
 
-    def extract_files(self, *, relative_paths_like, domain_like=None, output_folder,
+    def extract_files(self, *, relative_paths_like=None, domain_like=None, output_folder,
                       preserve_folders=False, domain_subfolders=False, incremental=False,
                       filter_callback=None):
         """
