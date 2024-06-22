@@ -7,7 +7,7 @@ __all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "Fil
 
 
 _CBC_BLOCK_SIZE = 16  # bytes.
-_CHUNK_SIZE = 100 * 1024**2  # 100MB blocks, must be a multiple of 16 bytes.
+DEFAULT_CHUNK_SIZE = 100 * 1024**2  # 100MB blocks, must be a multiple of 16 bytes.
 
 
 class RelativePath:
@@ -97,7 +97,7 @@ class FilePlist:
         self.encryption_key = self.plist['$objects'][self.data['EncryptionKey'].data]['NS.data'][4:] if 'EncryptionKey' in self.data else None
 
 
-def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
+def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath, chunk_size):
     """
     Decrypt a large iOS backup file in chunks, to avoid memory exhaustion.
 
@@ -126,7 +126,7 @@ def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
     # Decrypt chunks from input file, write to output, remove trailing padding.
     # This avoids having the whole file in-memory at one time; essential for large files!
     enc_filehandle.seek(0)
-    while enc_data := enc_filehandle.read(_CHUNK_SIZE):
+    while enc_data := enc_filehandle.read(chunk_size):
         dec_data = aes_cipher.decrypt(enc_data)
         if enc_filehandle.tell() == enc_size:
             # This is the last chunk, remove any padding (c.f. google_iphone_dataprotection.removePadding):

@@ -15,7 +15,7 @@ __all__ = ["EncryptedBackup"]
 # and code sample provided by @andrewdotn in this answer: https://stackoverflow.com/a/13793043
 class EncryptedBackup:
 
-    def __init__(self, *, backup_directory, passphrase):
+    def __init__(self, *, backup_directory, passphrase, decrypt_chunk_size=utils.DEFAULT_CHUNK_SIZE):
         """
         Decrypt an iOS encrypted backup using the passphrase chosen in iTunes.
 
@@ -48,6 +48,7 @@ class EncryptedBackup:
         self._manifest_db_path = os.path.join(self._backup_directory, 'Manifest.db')
         self._keybag = None
         self._unlocked = False
+        self._decrypt_chunk_size = decrypt_chunk_size
         # We need a temporary file for the decrypted database, because SQLite can't open bytes in memory as a database:
         self._temporary_folder = tempfile.mkdtemp()
         self._temp_decrypted_manifest_db_path = os.path.join(self._temporary_folder, 'Manifest.db')
@@ -175,7 +176,7 @@ class EncryptedBackup:
         # Find the name of the file on disk:
         filename_in_backup = os.path.join(self._backup_directory, file_id[:2], file_id)
         # Decrypt it to the output location:
-        utils.aes_decrypt_chunked(in_filename=filename_in_backup, out_filepath=output_filepath, key=key, file_plist=file_plist)
+        utils.aes_decrypt_chunked(in_filename=filename_in_backup, out_filepath=output_filepath, key=key, file_plist=file_plist, chunk_size=self._decrypt_chunk_size)
 
     def test_decryption(self):
         """Validate that the backup can be decrypted successfully."""
@@ -269,7 +270,7 @@ class EncryptedBackup:
         # Decrypt the requested file:
         self._decrypt_file_to_disk(file_id=file_id, file_plist=file_plist, key=inner_key, output_filepath=output_filename)
 
-    def extract_files(self, *, relative_paths_like, domain_like=None, output_folder,
+    def extract_files(self, *, relative_paths_like=None, domain_like=None, output_folder,
                       preserve_folders=False, domain_subfolders=False, incremental=False,
                       filter_callback=None):
         """
