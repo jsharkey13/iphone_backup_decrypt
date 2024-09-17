@@ -6,6 +6,8 @@ itself based on the [iphone-dataprotection](https://code.google.com/p/iphone-dat
 
 ## Install
 
+[![PyPI - Version](https://img.shields.io/pypi/v/iphone-backup-decrypt)](https://pypi.org/project/iphone-backup-decrypt/)
+
 Requires [Python 3.8](https://www.python.org/) or higher.
 
 The backup decryption keys are protected using 10 million rounds of PBKDF2 with SHA256, then 10 thousand further iterations of PBKDF2 with SHA-1.
