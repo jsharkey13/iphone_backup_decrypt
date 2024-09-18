@@ -269,7 +269,7 @@ class EncryptedBackup:
         # Decrypt the requested file:
         self._decrypt_file_to_disk(file_id=file_id, file_plist=file_plist, key=inner_key, output_filepath=output_filename)
 
-    def extract_files(self, *, relative_paths_like, domain_like=None, output_folder,
+    def extract_files(self, *, relative_paths_like=None, domain_like=None, output_folder,
                       preserve_folders=False, domain_subfolders=False, incremental=False,
                       filter_callback=None):
         """
@@ -279,15 +279,17 @@ class EncryptedBackup:
         but using 'preserve_folders' and 'domain_subfolders' may mitigate this.
 
         :param relative_paths_like:
-            An iOS 'relativePath' of the files to be decrypted, containing '%' or '_' SQL LIKE wildcards.
+            Optional. An iOS 'relativePath' of the files to be decrypted, containing '%' or '_' SQL LIKE wildcards.
             Common relative path wildcards are provided by the 'RelativePathsLike' class, otherwise these can be found
             by opening the decrypted Manifest.db file and examining the Files table.
+            One of relative_paths_like or domain_like must be provided.
         :param domain_like:
             Optional. An iOS 'domain' for the files to be decrypted, containing '%' or '_' SQL LIKE wildcards.
             If a domain is provided, only files from that domain will be extracted, which can be useful for non-unique
             relative paths.
             Common domain wildcards are provided by the 'DomainLike' class, otherwise these can be found by opening the
             decrypted Manifest.db file and examining the Files table.
+            One of relative_paths_like or domain_like must be provided.
         :param output_folder:
             The folder to write output files into. Files will be named with their internal iOS filenames and will
             overwrite anything in the output folder with that name.

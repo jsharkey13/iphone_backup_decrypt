@@ -7,7 +7,7 @@ __all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "Fil
 
 
 _CBC_BLOCK_SIZE = 16  # bytes.
-_CHUNK_SIZE = 100 * 1024**2  # 100MB blocks, must be a multiple of 16 bytes.
+_CHUNK_SIZE = 1024**2  # 1MB blocks, must be a multiple of 16 bytes.
 
 
 class RelativePath:
