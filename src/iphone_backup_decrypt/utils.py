@@ -1,5 +1,6 @@
 import os
 import plistlib
+import re
 
 import Crypto.Cipher.AES
 
@@ -8,6 +9,23 @@ __all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "Fil
 
 _CBC_BLOCK_SIZE = 16  # bytes.
 _CHUNK_SIZE = 1024**2  # 1MB blocks, must be a multiple of 16 bytes.
+_FILE_ID_PATTERN = re.compile(r"[0-9a-f]{40}")
+
+
+def _backup_file_path(backup_directory, file_id):
+    """Return the path for a valid file ID contained by the backup."""
+    if not isinstance(file_id, str) or _FILE_ID_PATTERN.fullmatch(file_id) is None:
+        raise ValueError(f"Invalid backup file ID: {repr(file_id)}")
+
+    backup_root = os.path.realpath(os.path.abspath(backup_directory))
+    file_path = os.path.realpath(os.path.join(backup_root, file_id[:2], file_id))
+    try:
+        is_within_backup = os.path.commonpath((backup_root, file_path)) == backup_root
+    except ValueError:
+        is_within_backup = False
+    if not is_within_backup:
+        raise ValueError(f"Backup file path escapes backup directory: {repr(file_path)}")
+    return file_path
 
 
 class RelativePath:

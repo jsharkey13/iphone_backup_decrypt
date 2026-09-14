@@ -159,7 +159,7 @@ class EncryptedBackup:
             raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a directory or empty.
         inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
         # Find the encrypted version of the file on disk and decrypt it:
-        filename_in_backup = os.path.join(self._backup_directory, file_id[:2], file_id)
+        filename_in_backup = utils._backup_file_path(self._backup_directory, file_id)
         with open(filename_in_backup, 'rb') as encrypted_file_filehandle:
             encrypted_data = encrypted_file_filehandle.read()
         # Decrypt the file contents:
@@ -173,7 +173,7 @@ class EncryptedBackup:
 
     def _decrypt_file_to_disk(self, *, file_id, key, file_plist, output_filepath):
         # Find the name of the file on disk:
-        filename_in_backup = os.path.join(self._backup_directory, file_id[:2], file_id)
+        filename_in_backup = utils._backup_file_path(self._backup_directory, file_id)
         # Decrypt it to the output location:
         utils.aes_decrypt_chunked(in_filename=filename_in_backup, out_filepath=output_filepath, key=key, file_plist=file_plist)
 
