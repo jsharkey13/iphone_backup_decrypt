@@ -3,7 +3,10 @@ import plistlib
 
 import Crypto.Cipher.AES
 
-__all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist", "aes_decrypt_chunked"]
+__all__ = [
+    "RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist",
+    "aes_decrypt_chunked", "aes_decrypt_file",
+]
 
 
 _CBC_BLOCK_SIZE = 16  # bytes.
@@ -95,6 +98,21 @@ class FilePlist:
         self.filesize = int(self.data.get("Size"))
         self.protection_class = self.data['ProtectionClass']
         self.encryption_key = self.plist['$objects'][self.data['EncryptionKey'].data]['NS.data'][4:] if 'EncryptionKey' in self.data else None
+
+
+def aes_decrypt_file(*, in_filename, key, out_filename):
+    """Decrypt a block-aligned AES-CBC file using bounded memory."""
+    aes_cipher = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv=b"\x00" * 16)
+    with open(in_filename, 'rb') as enc_filehandle:
+        enc_filehandle.seek(0, os.SEEK_END)
+        enc_size = enc_filehandle.tell()
+        if enc_size % _CBC_BLOCK_SIZE:
+            raise ValueError("AES decrypt: data length not /16!")
+
+        enc_filehandle.seek(0)
+        with open(out_filename, 'wb') as dec_filehandle:
+            while enc_data := enc_filehandle.read(_CHUNK_SIZE):
+                dec_filehandle.write(aes_cipher.decrypt(enc_data))
 
 
 def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):

@@ -106,14 +106,22 @@ class EncryptedBackup:
         self._read_and_unlock_keybag()
         # Decrypt the Manifest.db index database:
         manifest_key = self._manifest_plist['ManifestKey'][4:]
-        with open(self._manifest_db_path, 'rb') as encrypted_db_filehandle:
-            encrypted_db = encrypted_db_filehandle.read()
         manifest_class = struct.unpack('<l', self._manifest_plist['ManifestKey'][:4])[0]
         key = self._keybag.unwrapKeyForClass(manifest_class, manifest_key)
-        decrypted_data = google_iphone_dataprotection.AESdecryptCBC(encrypted_db, key)
-        # Write the decrypted Manifest.db temporarily to disk:
-        with open(self._temp_decrypted_manifest_db_path, 'wb') as decrypted_db_filehandle:
-            decrypted_db_filehandle.write(decrypted_data)
+        # Write the decrypted Manifest.db using bounded memory. Keep an incomplete
+        # decryption from being mistaken for a valid cached Manifest on retry.
+        partial_manifest_path = self._temp_decrypted_manifest_db_path + '.partial'
+        try:
+            utils.aes_decrypt_file(
+                in_filename=self._manifest_db_path,
+                key=key,
+                out_filename=partial_manifest_path,
+            )
+            os.replace(partial_manifest_path, self._temp_decrypted_manifest_db_path)
+        except Exception:
+            if os.path.exists(partial_manifest_path):
+                os.remove(partial_manifest_path)
+            raise
         # Open the temporary database to verify decryption success:
         if not self._open_temp_database():
             raise ConnectionError("Manifest.db file does not seem to be the right format!")
@@ -348,6 +356,13 @@ class EncryptedBackup:
         # The metadata is contained in the 'file' column, as a binary PList file.
         try:
             cur = self._temp_manifest_db_conn.cursor()
+            count_query = """
+                SELECT count(*)
+                FROM Files
+                WHERE relativePath LIKE ?
+                AND domain LIKE ?
+                AND flags=1;
+            """
             query = """
                 SELECT fileID, domain, relativePath, file
                 FROM Files
@@ -356,15 +371,15 @@ class EncryptedBackup:
                 AND flags=1
                 ORDER BY domain, relativePath;
             """
+            cur.execute(count_query, (relative_paths_like, domain_like))
+            total_files = cur.fetchone()[0]
             cur.execute(query, (relative_paths_like, domain_like))
-            results = cur.fetchall()
         except sqlite3.Error as e:
             raise RuntimeError("Error querying Manifest database!") from e
         # Ensure output destination exists then loop through matches:
         os.makedirs(output_folder, exist_ok=True)
         n_files = 0
-        total_files = len(results)
-        for n, (file_id, domain, matched_relative_path, file_bplist) in enumerate(results):
+        for n, (file_id, domain, matched_relative_path, file_bplist) in enumerate(cur):
             # Include this file?
             if not _include_fn(file_id=file_id, domain=domain, relative_path=matched_relative_path,
                                n=n, total_files=total_files):
@@ -387,7 +402,9 @@ class EncryptedBackup:
                     continue
             # Decrypt the file:
             inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
-            self._decrypt_file_to_disk(file_id=file_id, key=inner_key, file_plist=file_plist, output_filepath=output_filepath)
+            self._decrypt_file_to_disk(file_id=file_id, key=inner_key, file_plist=file_plist,
+                                       output_filepath=output_filepath)
             n_files += 1
+        cur.close()
         # Return how many files were extracted:
         return n_files
