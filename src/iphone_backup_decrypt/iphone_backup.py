@@ -370,13 +370,13 @@ class EncryptedBackup:
                                n=n, total_files=total_files):
                 continue
             # Build the output file path:
-            _output_path = [output_folder]
+            _output_path = []
             if domain_subfolders:
                 _output_path.append(domain)
             if preserve_folders:
                 _output_path.append(os.path.dirname(matched_relative_path))
             filename = os.path.basename(matched_relative_path)
-            output_filepath = os.path.join(*_output_path, filename)
+            output_filepath = utils._safe_output_path(output_folder, *_output_path, filename)
             # Get the file metadata PList:
             file_plist = utils.FilePlist(file_bplist)
             # Check if file already exists and we are doing an incremental extraction:

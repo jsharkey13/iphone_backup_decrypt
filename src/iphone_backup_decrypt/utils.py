@@ -10,6 +10,23 @@ _CBC_BLOCK_SIZE = 16  # bytes.
 _CHUNK_SIZE = 1024**2  # 1MB blocks, must be a multiple of 16 bytes.
 
 
+def _safe_output_path(output_folder, *untrusted_parts):
+    """Build an output path that cannot escape ``output_folder``."""
+    if not all(isinstance(part, str) for part in untrusted_parts):
+        raise ValueError("Output path components must be strings")
+
+    output_root = os.path.realpath(os.path.abspath(output_folder))
+    output_path = os.path.realpath(os.path.abspath(os.path.join(output_root, *untrusted_parts)))
+    try:
+        is_within_output = os.path.commonpath((output_root, output_path)) == output_root
+    except ValueError:
+        # ``commonpath`` raises for paths on different Windows drives.
+        is_within_output = False
+    if not is_within_output:
+        raise ValueError(f"Backup manifest path escapes output folder: {output_path!r}")
+    return output_path
+
+
 class RelativePath:
     """Relative paths for commonly accessed files."""
 
