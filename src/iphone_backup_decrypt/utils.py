@@ -23,7 +23,7 @@ def _safe_output_path(output_folder, *untrusted_parts):
         # ``commonpath`` raises for paths on different Windows drives.
         is_within_output = False
     if not is_within_output:
-        raise ValueError(f"Backup manifest path escapes output folder: {output_path!r}")
+        raise ValueError(f"Backup manifest path escapes output folder: {repr(output_path)}")
     return output_path
 
 
