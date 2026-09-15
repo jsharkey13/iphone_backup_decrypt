@@ -76,18 +76,12 @@ class Keybag:
             self.classKeys[currentClassKey[b"CLAS"]] = currentClassKey
 
     def unlockWithPassphrase(self, passphrase):
-        dpic_iterations = _validated_iteration_count(
-            self.attrs[b"DPIC"], "DPIC", _MAX_DPIC_ITERATIONS
-        )
-        iter_iterations = _validated_iteration_count(
-            self.attrs[b"ITER"], "ITER", _MAX_ITER_ITERATIONS
-        )
-        passphrase_round1 = pbkdf2_hmac(
-            'sha256', passphrase, self.attrs[b"DPSL"], dpic_iterations, 32
-        )
-        passphrase_key = pbkdf2_hmac(
-            'sha1', passphrase_round1, self.attrs[b"SALT"], iter_iterations, 32
-        )
+        # Validate iteration counts before attempting to use them:
+        dpic_iterations = _validated_iteration_count(self.attrs[b"DPIC"], "DPIC", _MAX_DPIC_ITERATIONS)
+        iter_iterations = _validated_iteration_count(self.attrs[b"ITER"], "ITER", _MAX_ITER_ITERATIONS)
+        # Decrypt keys:
+        passphrase_round1 = pbkdf2_hmac('sha256', passphrase, self.attrs[b"DPSL"], dpic_iterations, 32)
+        passphrase_key = pbkdf2_hmac('sha1', passphrase_round1, self.attrs[b"SALT"], iter_iterations, 32)
         for classkey in self.classKeys.values():
             if b"WPKY" not in classkey:
                 continue
