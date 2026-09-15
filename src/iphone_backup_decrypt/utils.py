@@ -15,39 +15,6 @@ _CHUNK_SIZE = 1024**2  # 1MB blocks, must be a multiple of 16 bytes.
 _FILE_ID_PATTERN = re.compile(r"[0-9a-f]{40}")
 
 
-def _backup_file_path(backup_directory, file_id):
-    """Return the path for a valid file ID contained by the backup."""
-    if not isinstance(file_id, str) or _FILE_ID_PATTERN.fullmatch(file_id) is None:
-        raise ValueError(f"Invalid backup file ID: {repr(file_id)}")
-
-    backup_root = os.path.realpath(os.path.abspath(backup_directory))
-    file_path = os.path.realpath(os.path.join(backup_root, file_id[:2], file_id))
-    try:
-        is_within_backup = os.path.commonpath((backup_root, file_path)) == backup_root
-    except ValueError:
-        is_within_backup = False
-    if not is_within_backup:
-        raise ValueError(f"Backup file path escapes backup directory: {repr(file_path)}")
-    return file_path
-
-
-def _safe_output_path(output_folder, *untrusted_parts):
-    """Build an output path that cannot escape ``output_folder``."""
-    if not all(isinstance(part, str) for part in untrusted_parts):
-        raise ValueError("Output path components must be strings")
-
-    output_root = os.path.realpath(os.path.abspath(output_folder))
-    output_path = os.path.realpath(os.path.abspath(os.path.join(output_root, *untrusted_parts)))
-    try:
-        is_within_output = os.path.commonpath((output_root, output_path)) == output_root
-    except ValueError:
-        # ``commonpath`` raises for paths on different Windows drives.
-        is_within_output = False
-    if not is_within_output:
-        raise ValueError(f"Backup manifest path escapes output folder: {repr(output_path)}")
-    return output_path
-
-
 class RelativePath:
     """Relative paths for commonly accessed files."""
 
@@ -133,6 +100,39 @@ class FilePlist:
         self.filesize = int(self.data.get("Size"))
         self.protection_class = self.data['ProtectionClass']
         self.encryption_key = self.plist['$objects'][self.data['EncryptionKey'].data]['NS.data'][4:] if 'EncryptionKey' in self.data else None
+
+
+def _backup_file_path(backup_directory, file_id):
+    """Return the path for a valid file ID contained by the backup."""
+    if not isinstance(file_id, str) or _FILE_ID_PATTERN.fullmatch(file_id) is None:
+        raise ValueError(f"Invalid backup file ID: {repr(file_id)}")
+
+    backup_root = os.path.realpath(os.path.abspath(backup_directory))
+    file_path = os.path.realpath(os.path.join(backup_root, file_id[:2], file_id))
+    try:
+        is_within_backup = os.path.commonpath((backup_root, file_path)) == backup_root
+    except ValueError:
+        is_within_backup = False
+    if not is_within_backup:
+        raise ValueError(f"Backup file path escapes backup directory: {repr(file_path)}")
+    return file_path
+
+
+def _safe_output_path(output_folder, *untrusted_parts):
+    """Build an output path that cannot escape ``output_folder``."""
+    if not all(isinstance(part, str) for part in untrusted_parts):
+        raise ValueError("Output path components must be strings")
+
+    output_root = os.path.realpath(os.path.abspath(output_folder))
+    output_path = os.path.realpath(os.path.abspath(os.path.join(output_root, *untrusted_parts)))
+    try:
+        is_within_output = os.path.commonpath((output_root, output_path)) == output_root
+    except ValueError:
+        # ``commonpath`` raises for paths on different Windows drives.
+        is_within_output = False
+    if not is_within_output:
+        raise ValueError(f"Backup manifest path escapes output folder: {repr(output_path)}")
+    return output_path
 
 
 def aes_decrypt_file(*, in_filename, key, out_filename):
