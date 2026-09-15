@@ -33,7 +33,7 @@ _MAX_ITER_ITERATIONS = 1_000_000
 def _validated_iteration_count(value, field_name, maximum):
     if not isinstance(value, int) or value < 1 or value > maximum:
         raise ValueError(
-            f"Invalid keybag {field_name} iteration count {value!r}; "
+            f"Invalid keybag {field_name} iteration count {repr(value)}; "
             f"expected an integer between 1 and {maximum}"
         )
     return value
