@@ -108,20 +108,7 @@ class EncryptedBackup:
         manifest_key = self._manifest_plist['ManifestKey'][4:]
         manifest_class = struct.unpack('<l', self._manifest_plist['ManifestKey'][:4])[0]
         key = self._keybag.unwrapKeyForClass(manifest_class, manifest_key)
-        # Write the decrypted Manifest.db using bounded memory. Keep an incomplete
-        # decryption from being mistaken for a valid cached Manifest on retry.
-        partial_manifest_path = self._temp_decrypted_manifest_db_path + '.partial'
-        try:
-            utils.aes_decrypt_file(
-                in_filename=self._manifest_db_path,
-                key=key,
-                out_filename=partial_manifest_path,
-            )
-            os.replace(partial_manifest_path, self._temp_decrypted_manifest_db_path)
-        except Exception:
-            if os.path.exists(partial_manifest_path):
-                os.remove(partial_manifest_path)
-            raise
+        utils.aes_decrypt_chunked(in_filename=self._manifest_db_path, out_filepath=self._temp_decrypted_manifest_db_path, key=key)
         # Open the temporary database to verify decryption success:
         if not self._open_temp_database():
             raise ConnectionError("Manifest.db file does not seem to be the right format!")
@@ -183,7 +170,13 @@ class EncryptedBackup:
         # Find the name of the file on disk:
         filename_in_backup = utils.backup_file_path(self._backup_directory, file_id)
         # Decrypt it to the output location:
-        utils.aes_decrypt_chunked(in_filename=filename_in_backup, out_filepath=output_filepath, key=key, file_plist=file_plist)
+        decrypted_size = utils.aes_decrypt_chunked(in_filename=filename_in_backup, out_filepath=output_filepath, key=key)
+        # Check output size:
+        if decrypted_size != file_plist.filesize:
+            print(f"WARN: decrypted {decrypted_size} bytes of '{output_filepath}', expected {file_plist.filesize} bytes!")
+        # Set the correct last_modified time on the output file, if possible:
+        if file_plist.mtime:
+            os.utime(output_filepath, times=(file_plist.mtime, file_plist.mtime))
 
     def test_decryption(self):
         """Validate that the backup can be decrypted successfully."""

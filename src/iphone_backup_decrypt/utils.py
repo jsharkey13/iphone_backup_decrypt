@@ -4,11 +4,7 @@ import re
 
 import Crypto.Cipher.AES
 
-__all__ = [
-    "RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist",
-    "backup_file_path", "safe_output_path",
-    "aes_decrypt_chunked", "aes_decrypt_file",
-]
+__all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist", "backup_file_path", "safe_output_path", "aes_decrypt_chunked"]
 
 
 _CBC_BLOCK_SIZE = 16  # bytes.
@@ -172,33 +168,18 @@ def safe_output_path(output_folder, *untrusted_parts):
         raise ValueError("Generated output path escapes output folder!") from e
 
 
-def aes_decrypt_file(*, in_filename, key, out_filename):
-    """Decrypt a block-aligned AES-CBC file using bounded memory."""
-    aes_cipher = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv=b"\x00" * 16)
-    with open(in_filename, 'rb') as enc_filehandle:
-        enc_filehandle.seek(0, os.SEEK_END)
-        enc_size = enc_filehandle.tell()
-        if enc_size % _CBC_BLOCK_SIZE:
-            raise ValueError("AES decrypt: data length not /16!")
-
-        enc_filehandle.seek(0)
-        with open(out_filename, 'wb') as dec_filehandle:
-            while enc_data := enc_filehandle.read(_CHUNK_SIZE):
-                dec_filehandle.write(aes_cipher.decrypt(enc_data))
-
-
-def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
+def aes_decrypt_chunked(*, in_filename, key, out_filepath):
     """
-    Decrypt a large iOS backup file in chunks, to avoid memory exhaustion.
+    Decrypt an AES encrypted file in chunks, to avoid memory exhaustion.
 
     :param in_filename:
-        The filename to open and read the encrypted bytes from, should be inside the backup directory.
-    :param file_plist:
-        The FilePlist object containing important metadata about the encrypted file.
+        The filename to open and read the encrypted bytes from.
     :param key:
-        The derived symmetric key to decrypt the file with.
+        The symmetric key to decrypt the file with.
     :param out_filepath:
         The filename to write the decrypted bytes to.
+    
+    :return the final size of the decrypted file.
     """
     # Initialise AES cipher:
     aes_cipher = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv=b"\x00" * 16)
@@ -206,31 +187,37 @@ def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
     output_directory = os.path.dirname(out_filepath)
     if output_directory:
         os.makedirs(output_directory, exist_ok=True)
-    enc_filehandle = open(in_filename, 'rb')
-    dec_filehandle = open(out_filepath, 'wb')
-    # Check total size of file is correct, padded to multiple of 16:
-    enc_filehandle.seek(0, os.SEEK_END)
-    enc_size = enc_filehandle.tell()
-    if enc_size % _CBC_BLOCK_SIZE:
-        raise ValueError("AES decrypt: data length not /16!")
-    # Decrypt chunks from input file, write to output, remove trailing padding.
-    # This avoids having the whole file in-memory at one time; essential for large files!
-    enc_filehandle.seek(0)
-    while enc_data := enc_filehandle.read(_CHUNK_SIZE):
-        dec_data = aes_cipher.decrypt(enc_data)
-        if enc_filehandle.tell() == enc_size:
-            # This is the last chunk, remove any padding (c.f. google_iphone_dataprotection.removePadding):
-            n = int(dec_data[-1])  # RFC 1423, final byte contains number of padding bytes.
-            if n > _CBC_BLOCK_SIZE or n > len(dec_data):
-                raise ValueError('AES decrypt: invalid CBC padding')
-            dec_data = dec_data[:-n]
-        dec_filehandle.write(dec_data)
-    # Check output size:
-    if dec_filehandle.tell() != file_plist.filesize:
-        print(f"WARN: decrypted {dec_filehandle.tell()} bytes of '{out_filepath}', expected {file_plist.filesize} bytes!")
-    # Close filehandles:
-    enc_filehandle.close()
-    dec_filehandle.close()
-    # Set the correct last_modified time on the output file, if possible:
-    if file_plist.mtime:
-        os.utime(out_filepath, times=(file_plist.mtime, file_plist.mtime))
+    with open(in_filename, 'rb') as enc_filehandle:
+        # Check total size of file is correct, padded to multiple of 16:
+        enc_filehandle.seek(0, os.SEEK_END)
+        enc_size = enc_filehandle.tell()
+        if enc_size % _CBC_BLOCK_SIZE:
+            raise ValueError("AES decrypt: data length not /16!")
+        # Decrypt chunks from input file, write to output, remove trailing padding.
+        # This avoids having the whole file in-memory at one time; essential for large files!
+        # Use a .part file whilst in progress and create the true output file only on success.
+        enc_filehandle.seek(0)
+        dec_size = 0
+        out_filepath_partial = f"{out_filepath}.part"
+        try:
+            with open(out_filepath_partial, 'wb') as dec_filehandle:
+                while enc_data := enc_filehandle.read(_CHUNK_SIZE):
+                    dec_data = aes_cipher.decrypt(enc_data)
+                    if enc_filehandle.tell() == enc_size:
+                        # This is the last chunk, remove any padding
+                        #  (c.f. google_iphone_dataprotection.removePadding):
+                        n = int(dec_data[-1])  # RFC 1423, final byte contains number of padding bytes.
+                        if n > _CBC_BLOCK_SIZE or n > len(dec_data):
+                            raise ValueError('AES decrypt: invalid CBC padding')
+                        dec_data = dec_data[:-n]
+                    dec_filehandle.write(dec_data)
+                # Track the final decrypted size:
+                dec_size = dec_filehandle.tell()
+            # Move the .part file to the intended output filepath:
+            os.replace(out_filepath_partial, out_filepath)
+        except Exception:
+            if os.path.exists(out_filepath_partial):
+                os.remove(out_filepath_partial)
+            raise
+        # Return the size of the decrypted file:
+        return dec_size
