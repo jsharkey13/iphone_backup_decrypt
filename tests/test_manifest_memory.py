@@ -6,9 +6,6 @@ from unittest.mock import MagicMock, patch
 
 import Crypto.Cipher.AES
 
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
 from iphone_backup_decrypt import utils
 from iphone_backup_decrypt.iphone_backup import EncryptedBackup
 
