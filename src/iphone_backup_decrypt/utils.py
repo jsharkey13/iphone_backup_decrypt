@@ -6,6 +6,7 @@ import Crypto.Cipher.AES
 
 __all__ = [
     "RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist",
+    "backup_file_path", "safe_output_path",
     "aes_decrypt_chunked", "aes_decrypt_file",
 ]
 
@@ -130,7 +131,7 @@ def _safe_path_join(root_folder, *untrusted_parts):
     return joined_path
 
 
-def _backup_file_path(backup_folder, file_id):
+def backup_file_path(backup_folder, file_id):
     """
     Generate the filepath for a file in the backup by file ID.
 
@@ -152,7 +153,7 @@ def _backup_file_path(backup_folder, file_id):
         raise ValueError("Backup file path escapes backup folder!") from e
 
 
-def _safe_output_path(output_folder, *untrusted_parts):
+def safe_output_path(output_folder, *untrusted_parts):
     """
     Generate an output path safely contained inside output_folder.
 
