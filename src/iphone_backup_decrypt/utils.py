@@ -204,11 +204,15 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
                 while enc_data := enc_filehandle.read(_CHUNK_SIZE):
                     dec_data = aes_cipher.decrypt(enc_data)
                     if enc_filehandle.tell() == enc_size:
-                        # This is the last chunk, remove any padding
-                        #  (c.f. google_iphone_dataprotection.removePadding):
+                        # This is the last chunk, which should have padding.
+                        #  (c.f. google_iphone_dataprotection.removePadding)
                         n = int(dec_data[-1])  # RFC 1423, final byte contains number of padding bytes.
-                        if n > _CBC_BLOCK_SIZE or n > len(dec_data):
+                        # Check padding is valid (n sensible, last n bytes identical):
+                        n_invalid = n == 0 or n > _CBC_BLOCK_SIZE or n > len(dec_data)
+                        padding_invalid = not dec_data[-1:]*n == dec_data[-n:]
+                        if n_invalid or padding_invalid:
                             raise ValueError('AES decrypt: invalid CBC padding')
+                        # Remove the padding:
                         dec_data = dec_data[:-n]
                     dec_filehandle.write(dec_data)
                 # Track the final decrypted size:
