@@ -32,18 +32,20 @@ class ManifestMemoryTests(unittest.TestCase):
     def test_manifest_cbc_decryption_reads_bounded_chunks(self):
         key = b"k" * 32
         plaintext = b"p" * (utils._CHUNK_SIZE + 32)
+        padding = b"\x10"*16
         encrypted = Crypto.Cipher.AES.new(
             key, Crypto.Cipher.AES.MODE_CBC, iv=b"\x00" * 16
-        ).encrypt(plaintext)
+        ).encrypt(plaintext + padding)
         encrypted_file = RecordingBytesIO(encrypted)
         decrypted_file = NonClosingBytesIO()
 
         with patch("builtins.open", side_effect=(encrypted_file, decrypted_file)):
-            utils.aes_decrypt_file(
-                in_filename="Manifest.db",
-                key=key,
-                out_filename="decrypted.db",
-            )
+            with patch("os.replace"):
+                utils.aes_decrypt_chunked(
+                    in_filename="Manifest.db",
+                    key=key,
+                    out_filepath="decrypted.db",
+                )
 
         self.assertEqual(decrypted_file.getvalue(), plaintext)
         self.assertTrue(encrypted_file.read_sizes)
