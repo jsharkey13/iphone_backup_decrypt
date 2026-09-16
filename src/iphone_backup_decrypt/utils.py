@@ -102,37 +102,73 @@ class FilePlist:
         self.encryption_key = self.plist['$objects'][self.data['EncryptionKey'].data]['NS.data'][4:] if 'EncryptionKey' in self.data else None
 
 
-def _backup_file_path(backup_directory, file_id):
-    """Return the path for a valid file ID contained by the backup."""
+def _safe_path_join(root_folder, *untrusted_parts):
+    """
+    Join untrusted file paths to a root folder preventing path traversal outside the root.
+
+    :param root_folder:
+        The base folder that generated file paths must not escape.
+    :param *untrusted_parts:
+        The untrusted path segments to join underneath the root folder.
+
+    :return: a safe absolute filepath.
+    :raises ValueError: 
+        If the untrusted parts lead to directory traversal outside the root folder.
+    """
+    if not all(isinstance(part, str) for part in untrusted_parts):
+        raise ValueError("Path components must be strings!")
+
+    true_root = os.path.realpath(os.path.abspath(root_folder))
+    joined_path = os.path.realpath(os.path.abspath(os.path.join(true_root, *untrusted_parts)))
+    try:
+        is_within_output = os.path.commonpath((true_root, joined_path)) == true_root
+    except ValueError:
+        is_within_output = False
+    if not is_within_output:
+        path_items = (root_folder,) + untrusted_parts
+        raise ValueError(f"Unsafe path join {repr(path_items)} leads to {repr(joined_path)}!")
+    return joined_path
+
+
+def _backup_file_path(backup_folder, file_id):
+    """
+    Generate the filepath for a file in the backup by file ID.
+
+    :param backup_folder:
+        The backup folder root.
+    :param file_id:
+        The file ID.
+
+    :return: a safe absolute filepath to that file in the backup.
+    :raises ValueError: 
+        If the generated path leads to directory traversal outside backup_folder.
+    """
     if not isinstance(file_id, str) or _FILE_ID_PATTERN.fullmatch(file_id) is None:
         raise ValueError(f"Invalid backup file ID: {repr(file_id)}")
 
-    backup_root = os.path.realpath(os.path.abspath(backup_directory))
-    file_path = os.path.realpath(os.path.join(backup_root, file_id[:2], file_id))
     try:
-        is_within_backup = os.path.commonpath((backup_root, file_path)) == backup_root
-    except ValueError:
-        is_within_backup = False
-    if not is_within_backup:
-        raise ValueError(f"Backup file path escapes backup directory: {repr(file_path)}")
-    return file_path
+        return _safe_path_join(backup_folder, file_id[:2], file_id)
+    except ValueError as e:
+        raise ValueError("Backup file path escapes backup folder!") from e
 
 
 def _safe_output_path(output_folder, *untrusted_parts):
-    """Build an output path that cannot escape ``output_folder``."""
-    if not all(isinstance(part, str) for part in untrusted_parts):
-        raise ValueError("Output path components must be strings")
+    """
+    Generate an output path safely contained inside output_folder.
 
-    output_root = os.path.realpath(os.path.abspath(output_folder))
-    output_path = os.path.realpath(os.path.abspath(os.path.join(output_root, *untrusted_parts)))
+    :param output_folder:
+        The output folder that generated file paths must not escape.
+    :param *untrusted_parts:
+        The untrusted path segments to join underneath the output folder.
+
+    :return: a safe absolute filepath.
+    :raises ValueError: 
+        If the untrusted parts lead to directory traversal outside the root directory.
+    """
     try:
-        is_within_output = os.path.commonpath((output_root, output_path)) == output_root
-    except ValueError:
-        # ``commonpath`` raises for paths on different Windows drives.
-        is_within_output = False
-    if not is_within_output:
-        raise ValueError(f"Backup manifest path escapes output folder: {repr(output_path)}")
-    return output_path
+        return _safe_path_join(output_folder, *untrusted_parts)
+    except ValueError as e:
+        raise ValueError("Generated output path escapes output folder!") from e
 
 
 def aes_decrypt_file(*, in_filename, key, out_filename):
