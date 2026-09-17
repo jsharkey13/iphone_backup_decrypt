@@ -26,6 +26,18 @@ except ImportError:
 
 __all__ = ["Keybag", "AESdecryptCBC", "removePadding"]
 
+_MAX_DPIC_ITERATIONS = 20_000_000
+_MAX_ITER_ITERATIONS = 1_000_000
+
+
+def _validated_iteration_count(value, field_name, maximum):
+    if not isinstance(value, int) or value < 1 or value > maximum:
+        raise ValueError(
+            f"Invalid keybag {field_name} iteration count {repr(value)}; "
+            f"expected an integer between 1 and {maximum}"
+        )
+    return value
+
 
 class Keybag:
     def __init__(self, data):
@@ -64,8 +76,12 @@ class Keybag:
             self.classKeys[currentClassKey[b"CLAS"]] = currentClassKey
 
     def unlockWithPassphrase(self, passphrase):
-        passphrase_round1 = pbkdf2_hmac('sha256', passphrase, self.attrs[b"DPSL"], self.attrs[b"DPIC"], 32)
-        passphrase_key = pbkdf2_hmac('sha1', passphrase_round1, self.attrs[b"SALT"], self.attrs[b"ITER"], 32)
+        # Validate iteration counts before attempting to use them:
+        dpic_iterations = _validated_iteration_count(self.attrs[b"DPIC"], "DPIC", _MAX_DPIC_ITERATIONS)
+        iter_iterations = _validated_iteration_count(self.attrs[b"ITER"], "ITER", _MAX_ITER_ITERATIONS)
+        # Decrypt keys:
+        passphrase_round1 = pbkdf2_hmac('sha256', passphrase, self.attrs[b"DPSL"], dpic_iterations, 32)
+        passphrase_key = pbkdf2_hmac('sha1', passphrase_round1, self.attrs[b"SALT"], iter_iterations, 32)
         for classkey in self.classKeys.values():
             if b"WPKY" not in classkey:
                 continue

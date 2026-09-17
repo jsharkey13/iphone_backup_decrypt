@@ -1,13 +1,17 @@
 import os
 import plistlib
+import re
+import tempfile
 
 import Crypto.Cipher.AES
 
-__all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist", "aes_decrypt_chunked"]
+__all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist",
+           "backup_file_path", "safe_output_path", "aes_decrypt_chunked"]
 
 
 _CBC_BLOCK_SIZE = 16  # bytes.
 _CHUNK_SIZE = 1024**2  # 1MB blocks, must be a multiple of 16 bytes.
+_FILE_ID_PATTERN = re.compile(r"[0-9a-f]{40}")
 
 
 class RelativePath:
@@ -97,18 +101,87 @@ class FilePlist:
         self.encryption_key = self.plist['$objects'][self.data['EncryptionKey'].data]['NS.data'][4:] if 'EncryptionKey' in self.data else None
 
 
-def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
+def _safe_path_join(root_folder, *untrusted_parts):
     """
-    Decrypt a large iOS backup file in chunks, to avoid memory exhaustion.
+    Join untrusted file paths to a root folder preventing path traversal outside the root.
+
+    :param root_folder:
+        The base folder that generated file paths must not escape.
+    :param *untrusted_parts:
+        The untrusted path segments to join underneath the root folder.
+
+    :return: a safe absolute filepath.
+    :raises ValueError:
+        If the untrusted parts lead to directory traversal outside the root folder.
+    """
+    if not all(isinstance(part, str) for part in untrusted_parts):
+        raise ValueError("Path components must be strings!")
+
+    true_root = os.path.realpath(os.path.abspath(root_folder))
+    joined_path = os.path.realpath(os.path.abspath(os.path.join(true_root, *untrusted_parts)))
+    try:
+        is_within_output = os.path.commonpath((true_root, joined_path)) == true_root
+    except ValueError:
+        is_within_output = False
+    if not is_within_output:
+        path_items = (root_folder,) + untrusted_parts
+        raise ValueError(f"Unsafe path join {repr(path_items)} leads to {repr(joined_path)}!")
+    return joined_path
+
+
+def backup_file_path(backup_folder, file_id):
+    """
+    Generate the filepath for a file in the backup by file ID.
+
+    :param backup_folder:
+        The backup folder root.
+    :param file_id:
+        The file ID.
+
+    :return: a safe absolute filepath to that file in the backup.
+    :raises ValueError:
+        If the generated path leads to directory traversal outside backup_folder.
+    """
+    if not isinstance(file_id, str) or _FILE_ID_PATTERN.fullmatch(file_id) is None:
+        raise ValueError(f"Invalid backup file ID: {repr(file_id)}")
+
+    try:
+        return _safe_path_join(backup_folder, file_id[:2], file_id)
+    except ValueError as e:
+        raise ValueError("Backup file path escapes backup folder!") from e
+
+
+def safe_output_path(output_folder, *untrusted_parts):
+    """
+    Generate an output path safely contained inside output_folder.
+
+    :param output_folder:
+        The output folder that generated file paths must not escape.
+    :param *untrusted_parts:
+        The untrusted path segments to join underneath the output folder.
+
+    :return: a safe absolute filepath.
+    :raises ValueError:
+        If the untrusted parts lead to directory traversal outside the root directory.
+    """
+    try:
+        return _safe_path_join(output_folder, *untrusted_parts)
+    except ValueError as e:
+        raise ValueError("Generated output path escapes output folder!") from e
+
+
+def aes_decrypt_chunked(*, in_filename, key, out_filepath):
+    """
+    Decrypt an AES encrypted file in chunks, to avoid memory exhaustion.
 
     :param in_filename:
-        The filename to open and read the encrypted bytes from, should be inside the backup directory.
-    :param file_plist:
-        The FilePlist object containing important metadata about the encrypted file.
+        The filename to open and read the encrypted bytes from.
     :param key:
-        The derived symmetric key to decrypt the file with.
+        The symmetric key to decrypt the file with.
     :param out_filepath:
         The filename to write the decrypted bytes to.
+
+    :return the final size of the decrypted file.
     """
     # Initialise AES cipher:
     aes_cipher = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv=b"\x00" * 16)
@@ -116,31 +189,66 @@ def aes_decrypt_chunked(*, in_filename, file_plist, key, out_filepath):
     output_directory = os.path.dirname(out_filepath)
     if output_directory:
         os.makedirs(output_directory, exist_ok=True)
-    enc_filehandle = open(in_filename, 'rb')
-    dec_filehandle = open(out_filepath, 'wb')
-    # Check total size of file is correct, padded to multiple of 16:
-    enc_filehandle.seek(0, os.SEEK_END)
-    enc_size = enc_filehandle.tell()
-    if enc_size % _CBC_BLOCK_SIZE:
-        raise ValueError("AES decrypt: data length not /16!")
-    # Decrypt chunks from input file, write to output, remove trailing padding.
-    # This avoids having the whole file in-memory at one time; essential for large files!
-    enc_filehandle.seek(0)
-    while enc_data := enc_filehandle.read(_CHUNK_SIZE):
-        dec_data = aes_cipher.decrypt(enc_data)
-        if enc_filehandle.tell() == enc_size:
-            # This is the last chunk, remove any padding (c.f. google_iphone_dataprotection.removePadding):
-            n = int(dec_data[-1])  # RFC 1423, final byte contains number of padding bytes.
-            if n > _CBC_BLOCK_SIZE or n > len(dec_data):
-                raise ValueError('AES decrypt: invalid CBC padding')
-            dec_data = dec_data[:-n]
-        dec_filehandle.write(dec_data)
-    # Check output size:
-    if dec_filehandle.tell() != file_plist.filesize:
-        print(f"WARN: decrypted {dec_filehandle.tell()} bytes of '{out_filepath}', expected {file_plist.filesize} bytes!")
-    # Close filehandles:
-    enc_filehandle.close()
-    dec_filehandle.close()
-    # Set the correct last_modified time on the output file, if possible:
-    if file_plist.mtime:
-        os.utime(out_filepath, times=(file_plist.mtime, file_plist.mtime))
+    with open(in_filename, 'rb') as enc_filehandle:
+        # Check total size of file is correct, padded to multiple of 16:
+        enc_filehandle.seek(0, os.SEEK_END)
+        enc_size = enc_filehandle.tell()
+        if enc_size % _CBC_BLOCK_SIZE:
+            raise ValueError("AES decrypt: data length not /16!")
+        # Decrypt chunks from input file, write to output, remove trailing padding.
+        # This avoids having the whole file in-memory at one time; essential for large files!
+        # Use a temporary file and create the true output file only on success.
+        enc_filehandle.seek(0)
+        dec_size = 0
+        temp_filehandle = tempfile.NamedTemporaryFile(dir=os.path.dirname(out_filepath), delete=False)
+        try:
+            with temp_filehandle:
+                while enc_data := enc_filehandle.read(_CHUNK_SIZE):
+                    dec_data = aes_cipher.decrypt(enc_data)
+                    if enc_filehandle.tell() == enc_size:
+                        # This is the last chunk, which should have padding.
+                        #  (c.f. google_iphone_dataprotection.removePadding)
+                        n = int(dec_data[-1])  # RFC 1423, final byte contains number of padding bytes.
+                        # Check padding is valid (n sensible, last n bytes identical):
+                        n_invalid = n == 0 or n > _CBC_BLOCK_SIZE or n > len(dec_data)
+                        padding_invalid = not dec_data[-1:]*n == dec_data[-n:]
+                        if n_invalid or padding_invalid:
+                            raise ValueError('AES decrypt: invalid CBC padding')
+                        # Remove the padding:
+                        dec_data = dec_data[:-n]
+                    temp_filehandle.write(dec_data)
+                # Track the final decrypted size:
+                dec_size = temp_filehandle.tell()
+            # Move the temporary file to the intended output filepath atomically:
+            os.replace(temp_filehandle.name, out_filepath)
+        except Exception:
+            if os.path.exists(temp_filehandle.name):
+                os.remove(temp_filehandle.name)
+            raise
+        # Return the size of the decrypted file:
+        return dec_size
+
+
+def remove_cbc_padding(data, blocksize=16):
+    """
+    Remove the padding from CBC mode decrypted data.
+
+    Based on google_iphone_dataprotection.removePadding,
+    but validating that the padding is present and in the
+    format expected.
+
+    :param data:
+        The decrypted bytes, which ought to end with block padding.
+    :param blocksize:
+        The size of the CBC block.
+
+    :return the data with the padding removed.
+    """
+    # Modified version of the original function above to check padding validity.
+    n = int(data[-1])  # RFC 1423, final byte contains number of padding bytes.
+    # Check padding is valid (n sensible, last n bytes identical):
+    n_invalid = n == 0 or n > blocksize or n > len(data)
+    padding_invalid = not data[-1:]*n == data[-n:]
+    if n_invalid or padding_invalid:
+        raise ValueError('AES decrypt: invalid CBC padding')
+    return data[:-n]
