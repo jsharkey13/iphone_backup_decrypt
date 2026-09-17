@@ -85,19 +85,25 @@ class EncryptedBackup:
     def _open_temp_database(self):
         # Check that we have successfully decrypted the file:
         if not os.path.exists(self._temp_decrypted_manifest_db_path):
-            return False
+            raise ValueError("Temporary Manifest.db file does not exist!")
         try:
             # Connect to the decrypted Manifest.db database if necessary:
             if self._temp_manifest_db_conn is None:
                 self._temp_manifest_db_conn = sqlite3.connect(self._temp_decrypted_manifest_db_path)
             # Check that it has the expected table structure and a list of files:
             cur = self._temp_manifest_db_conn.cursor()
-            cur.execute("SELECT count(*) FROM Files;")
-            file_count = cur.fetchone()[0]
+            # Check no huge entries in Manifest list:
+            cur.execute("SELECT max(length(file)) FROM Files;")
+            max_size = cur.fetchone()[0]
             cur.close()
-            return file_count > 0
-        except sqlite3.Error:
-            return False
+            if max_size is None:
+                # Either no valid file PList blobs, or no rows:
+                raise ValueError("Manifest.db file does not contain any data!")
+            if max_size > 100*1024:
+                # Most blobs are around 1-3KB in size, so a 100KB limit seems sensible.
+                raise ValueError("Manifest.db file contains unexpectedly huge file blobs!")
+        except sqlite3.Error as e:
+            raise ValueError("Fatal error whilst querying Manifest.db file!") from e
 
     def _decrypt_manifest_db_file(self):
         if os.path.exists(self._temp_decrypted_manifest_db_path):
@@ -110,8 +116,7 @@ class EncryptedBackup:
         key = self._keybag.unwrapKeyForClass(manifest_class, manifest_key)
         utils.aes_decrypt_chunked(in_filename=self._manifest_db_path, out_filepath=self._temp_decrypted_manifest_db_path, key=key)
         # Open the temporary database to verify decryption success:
-        if not self._open_temp_database():
-            raise ConnectionError("Manifest.db file does not seem to be the right format!")
+        self._open_temp_database()
 
     def _file_metadata_from_manifest(self, relative_path, domain_like=None):
         # Check arguments:
