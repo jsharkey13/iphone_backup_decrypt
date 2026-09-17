@@ -160,7 +160,7 @@ class EncryptedBackup:
         # Decrypt the file contents:
         decrypted_data = google_iphone_dataprotection.AESdecryptCBC(encrypted_data, inner_key)
         # Remove any padding introduced by the CBC encryption:
-        file_bytes = google_iphone_dataprotection.removePadding(decrypted_data)
+        file_bytes = utils.remove_cbc_padding(decrypted_data)
         # Check the data is as expected and return it:
         if len(file_bytes) != file_plist.filesize:
             raise AssertionError(f"Expected file size of {file_plist.filesize} bytes, decrypted {len(file_bytes)} bytes!")

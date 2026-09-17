@@ -225,3 +225,28 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
             raise
         # Return the size of the decrypted file:
         return dec_size
+
+
+def remove_cbc_padding(data, blocksize=16):
+    """
+    Remove the padding from CBC mode decrypted data.
+
+    Based on google_iphone_dataprotection.removePadding,
+    but validating that the padding is present and in the
+    format expected.
+
+    :param data:
+        The decrypted bytes, which ought to end with block padding.
+    :param blocksize:
+        The size of the CBC block.
+
+    :return the data with the padding removed.
+    """
+    # Modified version of the original function above to check padding validity.
+    n = int(data[-1])  # RFC 1423, final byte contains number of padding bytes.
+    # Check padding is valid (n sensible, last n bytes identical):
+    n_invalid = n == 0 or n > blocksize or n > len(data)
+    padding_invalid = not data[-1:]*n == data[-n:]
+    if n_invalid or padding_invalid:
+        raise ValueError('AES decrypt: invalid CBC padding')
+    return data[:-n]
