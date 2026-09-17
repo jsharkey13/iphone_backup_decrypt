@@ -162,8 +162,10 @@ class EncryptedBackup:
         # Remove any padding introduced by the CBC encryption:
         file_bytes = utils.remove_cbc_padding(decrypted_data)
         # Check the data is as expected and return it:
+        # Note to user if decrypted size does not match Manifest prediction.
+        # See comment in _decrypt_file_to_disk below.
         if len(file_bytes) != file_plist.filesize:
-            raise AssertionError(f"Expected file size of {file_plist.filesize} bytes, decrypted {len(file_bytes)} bytes!")
+            print(f"INFO: decrypted {len(file_bytes)} bytes, iOS claimed {file_plist.filesize} bytes.")
         return file_bytes
 
     def _decrypt_file_to_disk(self, *, file_id, key, file_plist, output_filepath):
@@ -171,9 +173,11 @@ class EncryptedBackup:
         filename_in_backup = utils.backup_file_path(self._backup_directory, file_id)
         # Decrypt it to the output location:
         decrypted_size = utils.aes_decrypt_chunked(in_filename=filename_in_backup, out_filepath=output_filepath, key=key)
-        # Check output size:
+        # Check output size. The Manifest entry routinely reports filesizes that do not match decrypted sizes,
+        # particularly for database and other 'live' filetypes. This might be an iOS bug or race condition?
+        # Either way, the user should likely be made aware just in case:
         if decrypted_size != file_plist.filesize:
-            print(f"WARN: decrypted {decrypted_size} bytes of '{output_filepath}', expected {file_plist.filesize} bytes!")
+            print(f"INFO: decrypted {decrypted_size} bytes to '{output_filepath}', iOS claimed {file_plist.filesize} bytes.")
         # Set the correct last_modified time on the output file, if possible:
         if file_plist.mtime:
             os.utime(output_filepath, times=(file_plist.mtime, file_plist.mtime))
