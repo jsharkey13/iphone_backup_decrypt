@@ -35,14 +35,16 @@ class ManifestMemoryTests(unittest.TestCase):
         ).encrypt(plaintext + padding)
         encrypted_file = RecordingBytesIO(encrypted)
         decrypted_file = NonClosingBytesIO()
+        decrypted_file.name = "fake-filename"
 
-        with patch("builtins.open", side_effect=(encrypted_file, decrypted_file)):
-            with patch("os.replace"):
-                utils.aes_decrypt_chunked(
-                    in_filename="Manifest.db",
-                    key=key,
-                    out_filepath="decrypted.db",
-                )
+        with patch("builtins.open", side_effect=(encrypted_file,)):
+            with patch("tempfile.NamedTemporaryFile", side_effect=(decrypted_file,)):
+                with patch("os.replace"):
+                    utils.aes_decrypt_chunked(
+                        in_filename="Manifest.db",
+                        key=key,
+                        out_filepath="decrypted.db",
+                    )
 
         self.assertEqual(decrypted_file.getvalue(), plaintext)
         self.assertTrue(encrypted_file.read_sizes)

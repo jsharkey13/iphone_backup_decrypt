@@ -1,6 +1,7 @@
 import os
 import plistlib
 import re
+import tempfile
 
 import Crypto.Cipher.AES
 
@@ -195,12 +196,12 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
             raise ValueError("AES decrypt: data length not /16!")
         # Decrypt chunks from input file, write to output, remove trailing padding.
         # This avoids having the whole file in-memory at one time; essential for large files!
-        # Use a .part file whilst in progress and create the true output file only on success.
+        # Use a temporary file and create the true output file only on success.
         enc_filehandle.seek(0)
         dec_size = 0
-        out_filepath_partial = f"{out_filepath}.part"
+        temp_filehandle = tempfile.NamedTemporaryFile(dir=os.path.dirname(out_filepath), delete=False)
         try:
-            with open(out_filepath_partial, 'wb') as dec_filehandle:
+            with temp_filehandle:
                 while enc_data := enc_filehandle.read(_CHUNK_SIZE):
                     dec_data = aes_cipher.decrypt(enc_data)
                     if enc_filehandle.tell() == enc_size:
@@ -214,14 +215,14 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
                             raise ValueError('AES decrypt: invalid CBC padding')
                         # Remove the padding:
                         dec_data = dec_data[:-n]
-                    dec_filehandle.write(dec_data)
+                    temp_filehandle.write(dec_data)
                 # Track the final decrypted size:
-                dec_size = dec_filehandle.tell()
-            # Move the .part file to the intended output filepath:
-            os.replace(out_filepath_partial, out_filepath)
+                dec_size = temp_filehandle.tell()
+            # Move the temporary file to the intended output filepath atomically:
+            os.replace(temp_filehandle.name, out_filepath)
         except Exception:
-            if os.path.exists(out_filepath_partial):
-                os.remove(out_filepath_partial)
+            if os.path.exists(temp_filehandle.name):
+                os.remove(temp_filehandle.name)
             raise
         # Return the size of the decrypted file:
         return dec_size
