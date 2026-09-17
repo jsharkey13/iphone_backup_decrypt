@@ -5,7 +5,8 @@ import tempfile
 
 import Crypto.Cipher.AES
 
-__all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist", "backup_file_path", "safe_output_path", "aes_decrypt_chunked"]
+__all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "FilePlist",
+           "backup_file_path", "safe_output_path", "aes_decrypt_chunked"]
 
 
 _CBC_BLOCK_SIZE = 16  # bytes.
@@ -110,7 +111,7 @@ def _safe_path_join(root_folder, *untrusted_parts):
         The untrusted path segments to join underneath the root folder.
 
     :return: a safe absolute filepath.
-    :raises ValueError: 
+    :raises ValueError:
         If the untrusted parts lead to directory traversal outside the root folder.
     """
     if not all(isinstance(part, str) for part in untrusted_parts):
@@ -138,7 +139,7 @@ def backup_file_path(backup_folder, file_id):
         The file ID.
 
     :return: a safe absolute filepath to that file in the backup.
-    :raises ValueError: 
+    :raises ValueError:
         If the generated path leads to directory traversal outside backup_folder.
     """
     if not isinstance(file_id, str) or _FILE_ID_PATTERN.fullmatch(file_id) is None:
@@ -160,7 +161,7 @@ def safe_output_path(output_folder, *untrusted_parts):
         The untrusted path segments to join underneath the output folder.
 
     :return: a safe absolute filepath.
-    :raises ValueError: 
+    :raises ValueError:
         If the untrusted parts lead to directory traversal outside the root directory.
     """
     try:
@@ -179,7 +180,7 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
         The symmetric key to decrypt the file with.
     :param out_filepath:
         The filename to write the decrypted bytes to.
-    
+
     :return the final size of the decrypted file.
     """
     # Initialise AES cipher:
