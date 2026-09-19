@@ -94,11 +94,14 @@ class FilePlist:
         # Parse the actual binary PList object:
         self.plist = plistlib.loads(bplist_bytes)
         # Common and useful attributes:
-        self.data = self.plist['$objects'][self.plist['$top']['root'].data]
-        self.mtime = self.data.get("LastModified")
-        self.filesize = int(self.data.get("Size"))
-        self.protection_class = self.data['ProtectionClass']
-        self.encryption_key = self.plist['$objects'][self.data['EncryptionKey'].data]['NS.data'][4:] if 'EncryptionKey' in self.data else None
+        self._data = self.plist['$objects'][self.plist['$top']['root'].data]
+        self.created = self._data.get("Birth")
+        self.mtime = self._data.get("LastModified")
+        self.filesize = int(self._data.get("Size"))
+        self.protection_class = self._data['ProtectionClass']
+        self.encryption_key = self.plist['$objects'][self._data['EncryptionKey'].data]['NS.data'][4:] if 'EncryptionKey' in self._data else None
+        self.target = self.plist['$objects'][self._data['Target'].data] if 'Target' in self._data else None
+        self.mode = f"{self._data.get('Mode', 0):06o}"  # Store as string in octal form.
 
 
 def _safe_path_join(root_folder, *untrusted_parts):

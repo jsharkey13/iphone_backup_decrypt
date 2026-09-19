@@ -55,11 +55,12 @@ class ManifestMemoryTests(unittest.TestCase):
             ("a" * 40, "HomeDomain", "Library/one.db", b"plist-one"),
             ("b" * 40, "HomeDomain", "Library/two.db", b"plist-two"),
         ]
-        cursor = MagicMock()
-        cursor.fetchone.return_value = (len(rows),)
-        cursor.__iter__.return_value = iter(rows)
+        cursor1 = MagicMock()
+        cursor1.fetchone.return_value = (len(rows),)
+        cursor2 = MagicMock()
+        cursor2.__iter__.return_value = iter(rows)
         connection = MagicMock()
-        connection.cursor.return_value = cursor
+        connection.cursor.side_effect = (cursor1, cursor2)
 
         backup = EncryptedBackup.__new__(EncryptedBackup)
         backup._temp_manifest_db_conn = connection
@@ -76,8 +77,9 @@ class ManifestMemoryTests(unittest.TestCase):
 
         self.assertEqual(extracted, len(rows))
         self.assertEqual(decrypt_file.call_count, len(rows))
-        cursor.fetchall.assert_not_called()
-        cursor.close.assert_called_once_with()
+        cursor2.fetchall.assert_not_called()
+        cursor1.close.assert_called_once()
+        cursor2.close.assert_called_once()
 
 
 if __name__ == "__main__":

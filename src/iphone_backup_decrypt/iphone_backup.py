@@ -152,6 +152,38 @@ class EncryptedBackup:
         file_id, file_bplist = result
         return file_id, file_bplist
 
+    def _get_manifest_rows_generator(self, *, relative_paths_like=None, domain_like=None, flags=None):
+        # Ensure that we've initialised everything:
+        if self._temp_manifest_db_conn is None:
+            self._decrypt_manifest_db_file()
+        # Use default values:
+        if relative_paths_like is None:
+            relative_paths_like = "%"
+        if domain_like is None:
+            domain_like = "%"
+        if flags is None:
+            flags = "%"
+        # Get the row data from the Manifest.db file:
+        try:
+            cur = self._temp_manifest_db_conn.cursor()
+            query = """
+                SELECT fileID, domain, relativePath, file
+                FROM Files
+                WHERE relativePath LIKE ?
+                AND domain LIKE ?
+                AND flags LIKE ?
+                ORDER BY domain, relativePath;
+            """
+            cur.execute(query, (relative_paths_like, domain_like, flags))
+        except sqlite3.Error as e:
+            raise RuntimeError("Error querying Manifest database!") from e
+        # Loop through the results:
+        for file_id, domain, matched_relative_path, file_bplist in cur:
+            file_plist = utils.FilePlist(file_bplist)
+            yield file_id, domain, matched_relative_path, file_plist
+        # Close the cursor once the generator is done:
+        cur.close()
+
     def _decrypt_inner_file(self, *, file_id, file_bplist):
         # Ensure we've already unlocked the Keybag:
         self._read_and_unlock_keybag()
@@ -365,8 +397,7 @@ class EncryptedBackup:
             domain_like = "%"
         # If the filter function is not provided, default to including everything:
         _include_fn = filter_callback if callable(filter_callback) else (lambda **kwargs: True)
-        # Use Manifest.db to find the on-disk filename(s) and file metadata, including the keys, for the file(s).
-        # The metadata is contained in the 'file' column, as a binary PList file.
+        # Get the total number of matching results:
         try:
             cur = self._temp_manifest_db_conn.cursor()
             count_query = """
@@ -376,22 +407,15 @@ class EncryptedBackup:
                 AND domain LIKE ?
                 AND flags=1;
             """
-            query = """
-                SELECT fileID, domain, relativePath, file
-                FROM Files
-                WHERE relativePath LIKE ?
-                AND domain LIKE ?
-                AND flags=1
-                ORDER BY domain, relativePath;
-            """
             cur.execute(count_query, (relative_paths_like, domain_like))
             total_files = cur.fetchone()[0]
-            cur.execute(query, (relative_paths_like, domain_like))
+            cur.close()
         except sqlite3.Error as e:
             raise RuntimeError("Error querying Manifest database!") from e
-        # Loop through the results:
+        # Get the full data from the Manifest file:
+        rows = self._get_manifest_rows_generator(relative_paths_like=relative_paths_like, domain_like=domain_like, flags=1)
         n_files = 0
-        for n, (file_id, domain, matched_relative_path, file_bplist) in enumerate(cur):
+        for n, (file_id, domain, matched_relative_path, file_plist) in enumerate(rows):
             # Build the output file path:
             _output_path = []
             if domain_subfolders:
@@ -409,19 +433,62 @@ class EncryptedBackup:
                 output_filepath = filter_result
             elif filter_result is not True:
                 print(f"WARN: Unexpected return type {type(filter_result)} from 'filter_callback'!")
-            # Get the file metadata PList:
-            file_plist = utils.FilePlist(file_bplist)
             # Check if file already exists and we are doing an incremental extraction:
             if incremental and os.path.exists(output_filepath):
                 existing_mtime = os.path.getmtime(output_filepath)
                 if file_plist.mtime <= existing_mtime:
                     # Skip re-writing this file to disk since it has not changed.
                     continue
-            # Decrypt the file:
+            # Decrypt the file to disk:
             inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
             self._decrypt_file_to_disk(file_id=file_id, key=inner_key, file_plist=file_plist,
                                        output_filepath=output_filepath)
             n_files += 1
-        cur.close()
         # Return how many files were extracted:
         return n_files
+
+    def get_folders(self, *, relative_paths_like=None, domain_like=None):
+        """
+        Create a generator returning data on folders contained in the backup.
+
+        The 'extract_files' method can preserve the folder structure seen in the relativePath values in the backup,
+        when 'preserve_folders' is True. However, empty folders are not included in the extraction and the creation
+        and last modification time of the folders is not loaded; this method can be used to obtain that data.
+        This method returns a generator which yields tuples of (file_id, domain, relative_path, file_plist)
+        using the 'utils.FilePlist' class to store the 'file_plist' data.
+
+        :param relative_paths_like:
+            Optional. An iOS 'relativePath' of the folder(s) of interest, containing '%' or '_' SQL LIKE wildcards.
+        :param domain_like:
+            Optional. An iOS 'domain' for the folders of interest, containing '%' or '_' SQL LIKE wildcards.
+
+        Example usage:
+
+        for file_id, domain, relative_path, file_plist in backup.get_folders():
+            print(domain, relative_path, file_plist.created, file_plist.mtime)
+        """
+        return self._get_manifest_rows_generator(relative_paths_like=relative_paths_like,
+                                                 domain_like=domain_like, flags=2)
+
+    def get_symlinks(self, *, relative_paths_like=None, domain_like=None):
+        """
+        Create a generator returning data on symlinks contained in the backup.
+
+        The iOS filesystem can contain symbolic links from one path to another path, these are backed up only as
+        records inside the Manifest.db file. This method returns a generator which yields tuples of
+        (file_id, domain, relative_path, file_plist) using the 'utils.FilePlist' class to store the 'file_plist' data.
+        Note that these symlinks are often to files which are not contained in the backup, and are relative to the
+        iOS-internal filesystem.
+
+        :param relative_paths_like:
+            Optional. An iOS 'relativePath' of the symlink(s) of interest, containing '%' or '_' SQL LIKE wildcards.
+        :param domain_like:
+            Optional. An iOS 'domain' for the symlink(s) of interest, containing '%' or '_' SQL LIKE wildcards.
+
+        Example usage:
+
+        for file_id, domain, relative_path, file_plist in backup.get_symlinks():
+            print(domain, relative_path, file_plist.target)
+        """
+        return self._get_manifest_rows_generator(relative_paths_like=relative_paths_like,
+                                                 domain_like=domain_like, flags=4)
