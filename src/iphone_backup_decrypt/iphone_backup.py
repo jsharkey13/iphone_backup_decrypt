@@ -292,31 +292,32 @@ class EncryptedBackup:
             Optional. An iOS 'relativePath' of the files to be decrypted, containing '%' or '_' SQL LIKE wildcards.
             Common relative path wildcards are provided by the 'RelativePathsLike' class, otherwise these can be found
             by opening the decrypted Manifest.db file and examining the Files table.
-            One of relative_paths_like or domain_like must be provided.
+            One of 'relative_paths_like' or 'domain_like' must be provided.
         :param domain_like:
             Optional. An iOS 'domain' for the files to be decrypted, containing '%' or '_' SQL LIKE wildcards.
             If a domain is provided, only files from that domain will be extracted, which can be useful for non-unique
             relative paths.
             Common domain wildcards are provided by the 'DomainLike' class, otherwise these can be found by opening the
             decrypted Manifest.db file and examining the Files table.
-            One of relative_paths_like or domain_like must be provided.
+            One of 'relative_paths_like' or 'domain_like' must be provided.
         :param output_folder:
             The folder to write output files into. Files will be named with their internal iOS filenames and will
             overwrite anything in the output folder with that name.
         :param preserve_folders:
             If True, preserve any folder structure present in matched files, creating subfolders of
-            output_folder as necessary. If not provided or False, file paths will be flattened to the
-            single output_folder, which may not preserve duplicate matched filenames.
+            'output_folder' as necessary. If not provided or False, file paths will be flattened to the
+            single 'output_folder', which may not preserve different files with the same name.
         :param domain_subfolders:
-            If True, extracted files will be split into domain subfolders inside output_folder. This can be useful when
-            extracting multiple domains which may have files with identical internal iOS filenames.
-            If preserve_folders is also True, the folder structure will appear underneath the domain subfolder.
+            If True, extracted files will be split into domain subfolders inside 'output_folder'.
+            This can be useful when extracting multiple domains which may have files with identical
+            internal iOS filenames.
+            If 'preserve_folders' is also True, the folder structure will appear underneath the domain subfolder.
             If not provided or False, files from different domains will not be separated.
         :param incremental:
             When True, if the file already exists in the output folder it will only be overwritten if the iOS
             last modification time is after the local filesystem modification time. This may avoid unnecessary
             disk IO and computation to decrypt the files.
-            Note that if files in the output folder are modified after extraction, it may prevent 'newer' versions
+            Note that if files in the output folder are modified after extraction, it may prevent newer versions
             being extracted from the backup!
             If False or not provided, files are always written to disk, overwriting any existing files.
         :param filter_callback
