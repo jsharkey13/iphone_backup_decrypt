@@ -321,17 +321,24 @@ class EncryptedBackup:
             being extracted from the backup!
             If False or not provided, files are always written to disk, overwriting any existing files.
         :param filter_callback
-            Optional. If it is provided this function will be called before each matching file is decrypted, with
-            metadata about the file. If it returns True, the file will be decrypted; if it returns a false-y value,
-            the file will be skipped. Note that the filtering this callback enables is performed before any
-            filtering caused by the 'incremental' argument and does not override that.
+            Optional. If provided, this function will be called before each matching file is decrypted, with
+            metadata about the file.
+            If it returns True, the file will be decrypted; if it returns False or None, the file will be skipped.
+            If it returns a string, that string will be used as the output filename; this replaces the generated
+            output filename value provided to the callback function. If this rename functionality is used, the
+            returned value will be used as-is without any checks and is not constrained to be inside 'output_folder';
+            consider using 'utils.safe_output_path(...)' to create a safe path to return here.
+            Note that the filtering this callback enables is performed after filtering based on 'relative_paths_like'
+            and 'domain_like', but before any filtering caused by 'incremental=True' and will not override that.
             This can be used to perform more complex file extraction than wildcard matching by relativePath and domain.
             The callback can also be used to deduce progress information, since the function is provided with
             data about the index of the current file and the total number of matched files.
+            Excluding files in bulk using this filter will be slower than filtering using relativePath and
+            domain, due to the filesystem checks performed to create the generated safe output filename.
             An example including the callback function signature (including '**kwargs' is strongly recommended for
             forwards-compatibility):
 
-                def f(*, n, total_files, relative_path, domain, file_id, **kwargs):
+                def f(*, n, total_files, relative_path, domain, file_id, output_filename, **kwargs):
                     return True
 
                 backup.decrypt_files(..., filter_callback=f)
@@ -379,14 +386,9 @@ class EncryptedBackup:
             cur.execute(query, (relative_paths_like, domain_like))
         except sqlite3.Error as e:
             raise RuntimeError("Error querying Manifest database!") from e
-        # Ensure output destination exists then loop through matches:
-        os.makedirs(output_folder, exist_ok=True)
+        # Loop through the results:
         n_files = 0
         for n, (file_id, domain, matched_relative_path, file_bplist) in enumerate(cur):
-            # Include this file?
-            if not _include_fn(file_id=file_id, domain=domain, relative_path=matched_relative_path,
-                               n=n, total_files=total_files):
-                continue
             # Build the output file path:
             _output_path = []
             if domain_subfolders:
@@ -395,6 +397,15 @@ class EncryptedBackup:
                 _output_path.append(os.path.dirname(matched_relative_path))
             filename = os.path.basename(matched_relative_path)
             output_filepath = utils.safe_output_path(output_folder, *_output_path, filename)
+            # Check filter function result for excluded or renamed files:
+            filter_result = _include_fn(file_id=file_id, domain=domain, relative_path=matched_relative_path,
+                                        output_filename=output_filepath, n=n, total_files=total_files)
+            if filter_result is None or filter_result is False:
+                continue
+            elif isinstance(filter_result, str):
+                output_filepath = filter_result
+            elif filter_result is not True:
+                print(f"WARN: Unexpected return type {type(filter_result)} from 'filter_callback'!")
             # Get the file metadata PList:
             file_plist = utils.FilePlist(file_bplist)
             # Check if file already exists and we are doing an incremental extraction:
