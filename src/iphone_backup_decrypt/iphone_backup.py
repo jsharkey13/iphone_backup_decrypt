@@ -357,7 +357,7 @@ class EncryptedBackup:
             If False or not provided, files are always written to disk, overwriting any existing files.
         :param filter_callback
             Optional. If provided, this function will be called before each matching file is decrypted, with
-            metadata about the file.
+            all available metadata about the file from the Manifest.db.
             If it returns True, the file will be decrypted; if it returns False or None, the file will be skipped.
             If it returns a string, that string will be used as the output filename; this replaces the generated
             output filename value provided to the callback function. If this rename functionality is used, the
@@ -373,7 +373,7 @@ class EncryptedBackup:
             An example including the callback function signature (including '**kwargs' is strongly recommended for
             forwards-compatibility):
 
-                def f(*, n, total_files, relative_path, domain, file_id, output_filename, **kwargs):
+                def f(*, n, total_files, file_id, relative_path, domain, file_plist, output_filename, **kwargs):
                     return True
 
                 backup.decrypt_files(..., filter_callback=f)
@@ -426,7 +426,8 @@ class EncryptedBackup:
             output_filepath = utils.safe_output_path(output_folder, *_output_path, filename)
             # Check filter function result for excluded or renamed files:
             filter_result = _include_fn(file_id=file_id, domain=domain, relative_path=matched_relative_path,
-                                        output_filename=output_filepath, n=n, total_files=total_files)
+                                        file_plist=file_plist, output_filename=output_filepath,
+                                        n=n, total_files=total_files)
             if filter_result is None or filter_result is False:
                 continue
             elif isinstance(filter_result, str):
