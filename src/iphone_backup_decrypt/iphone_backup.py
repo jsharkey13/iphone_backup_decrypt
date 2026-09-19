@@ -397,7 +397,7 @@ class EncryptedBackup:
             # Get the file metadata PList:
             file_plist = utils.FilePlist(file_bplist)
             # Check if file already exists and we are doing an incremental extraction:
-            if os.path.exists(output_filepath) and incremental:
+            if incremental and os.path.exists(output_filepath):
                 existing_mtime = os.path.getmtime(output_filepath)
                 if file_plist.mtime <= existing_mtime:
                     # Skip re-writing this file to disk since it has not changed.
