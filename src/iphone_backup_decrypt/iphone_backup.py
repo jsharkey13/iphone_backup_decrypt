@@ -70,15 +70,18 @@ class EncryptedBackup:
     def _read_and_unlock_keybag(self):
         if self._unlocked:
             return self._unlocked
-        # Open the Manifest.plist file to access the Keybag:
+        # Open the Manifest.plist file we need to access the Keybag:
         with open(self._manifest_plist_path, 'rb') as infile:
             self._manifest_plist = plistlib.load(infile)
+        # Is this an encrypted backup?
+        if not self._manifest_plist.get("IsEncrypted"):
+            raise ValueError("Backup does not look like an encrypted iOS backup!")
+        # Load and unlock the keybag data:
         self._keybag = google_iphone_dataprotection.Keybag(self._manifest_plist['BackupKeyBag'])
-        # Attempt to unlock the Keybag:
         self._unlocked = self._keybag.unlockWithPassphrase(self._passphrase)
         if not self._unlocked:
             raise ValueError("Failed to decrypt keys: incorrect passphrase?")
-        # No need to keep the passphrase anymore:
+        # No need to keep the passphrase now:
         self._passphrase = None
         return True
 
