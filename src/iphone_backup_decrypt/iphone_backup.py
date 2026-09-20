@@ -15,7 +15,7 @@ __all__ = ["EncryptedBackup"]
 # and code sample provided by @andrewdotn in this answer: https://stackoverflow.com/a/13793043
 class EncryptedBackup:
 
-    def __init__(self, *, backup_directory, passphrase):
+    def __init__(self, *, backup_directory, passphrase=None, passphrase_key=None):
         """
         Decrypt an iOS encrypted backup using the passphrase chosen in iTunes.
 
@@ -36,11 +36,28 @@ class EncryptedBackup:
         :param passphrase:
             The passphrase chosen in iTunes when first choosing to encrypt backups.
             If it requires an encoding other than ASCII or UTF-8, a bytes object must be provided.
+            Either 'passphrase' or 'passphrase_key' must be provided.
+        :param passphrase_key:
+            Optional. If the raw backup passphrase key is known, it can be provided instead of the
+            passphrase to speed up loading an encrypted backup. This functionality is intended for
+            advanced use or repeated use of a backup. To obtain the passphrase key from an
+            EncryptedBackup use:
+                key = backup._keybag.passphrase_key
+            If provided as well as 'passphrase', the key will be used in preference.
+            Either 'passphrase' or 'passphrase_key' must be provided.
         """
+        # Validate the passphrase:
+        if passphrase is None and passphrase_key is None:
+            raise ValueError("Either the passphrase or passphrase_key must be provided!")
+        if not isinstance(passphrase_key, bytes):
+            raise TypeError("If provided, the passphrase_key must be a bytes object!")
+        if not isinstance(passphrase, (str, bytes)):
+            raise TypeError("If provided, the passphrase must be a string or bytes object!")
         # Public state:
         self.decrypted = False
         # Keep track of the backup directory, and more dangerously, keep the backup passphrase as bytes until used:
         self._backup_directory = os.path.expandvars(backup_directory)
+        self._passphrase_key = passphrase_key
         self._passphrase = passphrase if isinstance(passphrase, bytes) else passphrase.encode("utf-8")
         # Internals for unlocking the Keybag:
         self._manifest_plist_path = os.path.join(self._backup_directory, 'Manifest.plist')
@@ -78,11 +95,15 @@ class EncryptedBackup:
             raise ValueError("Backup does not look like an encrypted iOS backup!")
         # Load and unlock the keybag data:
         self._keybag = utils.BackupKeyBag(self._manifest_plist['BackupKeyBag'])
-        self._unlocked = self._keybag.unlock_with_passphrase(self._passphrase)
+        if self._passphrase_key is not None:
+            self._unlocked = self._keybag.unlock_with_key(self._passphrase_key)
+        else:
+            self._unlocked = self._keybag.unlock_with_passphrase(self._passphrase)
         if not self._unlocked:
             raise ValueError("Failed to decrypt keys: incorrect passphrase?")
         # No need to keep the passphrase now:
         self._passphrase = None
+        self._passphrase_key = None
         return True
 
     def _open_temp_database(self):
