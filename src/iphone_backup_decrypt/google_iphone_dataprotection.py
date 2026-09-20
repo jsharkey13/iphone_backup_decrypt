@@ -4,43 +4,30 @@
 #     iphone-dataprotection/python_scripts/keystore/keybag.py
 #     iphone-dataprotection/python_scripts/crypto/aes.py
 # Original License: https://opensource.org/licenses/BSD-3-Clause
+#
+# It is now unused and remains for reference purposes only.
 #####
 
 import struct
+import warnings
 
 import Crypto.Cipher.AES
-import Crypto.Hash
-import Crypto.Protocol.KDF
 
-try:
-    # Prefer a fast, pure C++ implementation:
-    from fastpbkdf2 import pbkdf2_hmac
-except ImportError:
-    # Otherwise, use pycryptodome - wrapping it to look like the standard library method signature.
-    # It is 2-3x faster than the standard library 'hashlib.pbkdf2_hmac' method, but still 2x slower than fastpbkdf2.
-    HASH_FNS = {"sha1": Crypto.Hash.SHA1, "sha256": Crypto.Hash.SHA256}
-
-    def pbkdf2_hmac(hash_name, password, salt, iterations, dklen=None):
-        return Crypto.Protocol.KDF.PBKDF2(password, salt, dklen, iterations, hmac_hash_module=HASH_FNS[hash_name])
-
+from . import utils
 
 __all__ = ["Keybag", "AESdecryptCBC", "removePadding"]
 
-_MAX_DPIC_ITERATIONS = 20_000_000
-_MAX_ITER_ITERATIONS = 1_000_000
 
-
-def _validated_iteration_count(value, field_name, maximum):
-    if not isinstance(value, int) or value < 1 or value > maximum:
-        raise ValueError(
-            f"Invalid keybag {field_name} iteration count {repr(value)}; "
-            f"expected an integer between 1 and {maximum}"
-        )
-    return value
+# Retain these names at the top-level for backwards-compatibility only:
+pbkdf2_hmac = utils.pbkdf2_hmac
+_MAX_DPIC_ITERATIONS = utils._MAX_DPIC_ITERATIONS
+_MAX_ITER_ITERATIONS = utils._MAX_ITER_ITERATIONS
+_validated_iteration_count = utils.BackupKeyBag._validate_iterations
 
 
 class Keybag:
     def __init__(self, data):
+        warnings.warn("Keybag is deprecated. Consider using 'utils.BackupKeyBag' instead.", DeprecationWarning, stacklevel=2)
         self.type = None
         self.uuid = None
         self.wrap = None
@@ -119,6 +106,7 @@ def _pack64bit(s):
 
 
 def _AESUnwrap(kek, wrapped):
+    warnings.warn("_AESUnwrap is deprecated. Consider using 'utils.aes_unwrap' instead.", DeprecationWarning, stacklevel=2)
     C = []
     for i in range(len(wrapped)//8):
         C.append(_unpack64bit(wrapped[i * 8:i * 8 + 8]))
@@ -144,6 +132,7 @@ def _AESUnwrap(kek, wrapped):
 
 
 def AESdecryptCBC(data, key, iv=b"\x00" * 16):
+    warnings.warn("AESdecryptCBC is deprecated. Consider using 'utils.aes_decrypt_cbc' instead.", DeprecationWarning, stacklevel=2)
     if len(data) % 16:
         print("WARN: AESdecryptCBC: data length not /16, truncating")
         data = data[0:(len(data)/16) * 16]
@@ -152,6 +141,7 @@ def AESdecryptCBC(data, key, iv=b"\x00" * 16):
 
 
 def removePadding(data, blocksize=16):
+    warnings.warn("removePadding is deprecated. Consider using 'utils.remove_cbc_padding' instead.", DeprecationWarning, stacklevel=2)
     n = int(data[-1])  # RFC 1423: last byte contains number of padding bytes.
     if n > blocksize or n > len(data):
         raise Exception('Invalid CBC padding')

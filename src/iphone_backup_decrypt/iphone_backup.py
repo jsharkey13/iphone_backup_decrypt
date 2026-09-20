@@ -6,7 +6,7 @@ import struct
 import tempfile
 from contextlib import contextmanager
 
-from . import google_iphone_dataprotection, utils
+from . import utils
 
 __all__ = ["EncryptedBackup"]
 
@@ -77,8 +77,8 @@ class EncryptedBackup:
         if not self._manifest_plist.get("IsEncrypted"):
             raise ValueError("Backup does not look like an encrypted iOS backup!")
         # Load and unlock the keybag data:
-        self._keybag = google_iphone_dataprotection.Keybag(self._manifest_plist['BackupKeyBag'])
-        self._unlocked = self._keybag.unlockWithPassphrase(self._passphrase)
+        self._keybag = utils.BackupKeyBag(self._manifest_plist['BackupKeyBag'])
+        self._unlocked = self._keybag.unlock_with_passphrase(self._passphrase)
         if not self._unlocked:
             raise ValueError("Failed to decrypt keys: incorrect passphrase?")
         # No need to keep the passphrase now:
@@ -116,7 +116,7 @@ class EncryptedBackup:
         # Decrypt the Manifest.db index database:
         manifest_key = self._manifest_plist['ManifestKey'][4:]
         manifest_class = struct.unpack('<l', self._manifest_plist['ManifestKey'][:4])[0]
-        key = self._keybag.unwrapKeyForClass(manifest_class, manifest_key)
+        key = self._keybag.unwrap_key_for_class(manifest_class, manifest_key)
         utils.aes_decrypt_chunked(in_filename=self._manifest_db_path, out_filepath=self._temp_decrypted_manifest_db_path, key=key)
         # Open the temporary database to verify decryption success:
         self._open_temp_database()
@@ -192,13 +192,13 @@ class EncryptedBackup:
         # Extract the decryption key from the PList data:
         if file_plist.encryption_key is None:
             raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a directory or empty.
-        inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
+        inner_key = self._keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
         # Find the encrypted version of the file on disk and decrypt it:
         filename_in_backup = utils.backup_file_path(self._backup_directory, file_id)
         with open(filename_in_backup, 'rb') as encrypted_file_filehandle:
             encrypted_data = encrypted_file_filehandle.read()
         # Decrypt the file contents:
-        decrypted_data = google_iphone_dataprotection.AESdecryptCBC(encrypted_data, inner_key)
+        decrypted_data = utils.aes_decrypt_cbc(data=encrypted_data, key=inner_key)
         # Remove any padding introduced by the CBC encryption:
         file_bytes = utils.remove_cbc_padding(decrypted_data)
         # Check the data is as expected and return it:
@@ -310,7 +310,7 @@ class EncryptedBackup:
         # Extract the required metadata:
         file_id, file_bplist = self._file_metadata_from_manifest(relative_path, domain_like)
         file_plist = utils.FilePlist(file_bplist)
-        inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
+        inner_key = self._keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
         # Decrypt the requested file:
         self._decrypt_file_to_disk(file_id=file_id, file_plist=file_plist, key=inner_key, output_filepath=output_filename)
 
@@ -441,7 +441,7 @@ class EncryptedBackup:
                     # Skip re-writing this file to disk since it has not changed.
                     continue
             # Decrypt the file to disk:
-            inner_key = self._keybag.unwrapKeyForClass(file_plist.protection_class, file_plist.encryption_key)
+            inner_key = self._keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
             self._decrypt_file_to_disk(file_id=file_id, key=inner_key, file_plist=file_plist,
                                        output_filepath=output_filepath)
             n_files += 1
