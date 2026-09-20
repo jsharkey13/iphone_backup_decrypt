@@ -64,7 +64,6 @@ class EncryptedBackup:
         self._manifest_plist = None
         self._manifest_db_path = os.path.join(self._backup_directory, 'Manifest.db')
         self._keybag = None
-        self._unlocked = False
         # We need a temporary file for the decrypted database, because SQLite can't open bytes in memory as a database:
         self._temporary_folder = tempfile.mkdtemp()
         self._temp_decrypted_manifest_db_path = os.path.join(self._temporary_folder, 'Manifest.db')
@@ -85,8 +84,8 @@ class EncryptedBackup:
             raise
 
     def _read_and_unlock_keybag(self):
-        if self._unlocked:
-            return self._unlocked
+        if self._keybag and self._keybag.unlocked:
+            return self._keybag.unlocked
         # Open the Manifest.plist file we need to access the Keybag:
         with open(self._manifest_plist_path, 'rb') as infile:
             self._manifest_plist = plistlib.load(infile)
@@ -96,10 +95,10 @@ class EncryptedBackup:
         # Load and unlock the keybag data:
         self._keybag = utils.BackupKeyBag(self._manifest_plist['BackupKeyBag'])
         if self._passphrase_key is not None:
-            self._unlocked = self._keybag.unlock_with_key(self._passphrase_key)
+            self._keybag.unlock_with_key(self._passphrase_key)
         else:
-            self._unlocked = self._keybag.unlock_with_passphrase(self._passphrase)
-        if not self._unlocked:
+            self._keybag.unlock_with_passphrase(self._passphrase)
+        if not self._keybag.unlocked:
             raise ValueError("Failed to decrypt keys: incorrect passphrase?")
         # No need to keep the passphrase now:
         self._passphrase = None
