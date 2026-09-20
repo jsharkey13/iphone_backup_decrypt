@@ -184,7 +184,7 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
     :param out_filepath:
         The filename to write the decrypted bytes to.
 
-    :return the final size of the decrypted file.
+    :return: the final size of the decrypted file.
     """
     # Initialise AES cipher:
     aes_cipher = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv=b"\x00" * 16)
@@ -245,7 +245,7 @@ def remove_cbc_padding(data, blocksize=16):
     :param blocksize:
         The size of the CBC block.
 
-    :return the data with the padding removed.
+    :return: the data with the padding removed.
     """
     # Modified version of the original function above to check padding validity.
     n = int(data[-1])  # RFC 1423, final byte contains number of padding bytes.
