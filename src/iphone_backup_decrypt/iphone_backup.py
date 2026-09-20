@@ -120,6 +120,7 @@ class EncryptedBackup:
         utils.aes_decrypt_chunked(in_filename=self._manifest_db_path, out_filepath=self._temp_decrypted_manifest_db_path, key=key)
         # Open the temporary database to verify decryption success:
         self._open_temp_database()
+        self.decrypted = True
 
     def _file_metadata_from_manifest(self, relative_path, domain_like=None):
         # Check arguments:
