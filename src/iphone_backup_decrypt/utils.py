@@ -9,7 +9,7 @@ __all__ = ["RelativePath", "RelativePathsLike", "DomainLike", "MatchFiles", "Fil
            "backup_file_path", "safe_output_path", "aes_decrypt_chunked"]
 
 
-_CBC_BLOCK_SIZE = 16  # bytes.
+_AES_BLOCK_SIZE = Crypto.Cipher.AES.block_size
 _CHUNK_SIZE = 1024**2  # 1MB blocks, must be a multiple of 16 bytes.
 _FILE_ID_PATTERN = re.compile(r"[0-9a-f]{40}")
 
@@ -187,17 +187,17 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
     :return: the final size of the decrypted file.
     """
     # Initialise AES cipher:
-    aes_cipher = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv=b"\x00" * 16)
+    aes_cipher = Crypto.Cipher.AES.new(key, Crypto.Cipher.AES.MODE_CBC, iv=b"\x00" * _AES_BLOCK_SIZE)
     # Open the input and output files:
     output_directory = os.path.dirname(out_filepath)
     if output_directory:
         os.makedirs(output_directory, exist_ok=True)
     with open(in_filename, 'rb') as enc_filehandle:
-        # Check total size of file is correct, padded to multiple of 16:
+        # Check total size of file is correct, padded to multiple of _AES_BLOCK_SIZE:
         enc_filehandle.seek(0, os.SEEK_END)
         enc_size = enc_filehandle.tell()
-        if enc_size % _CBC_BLOCK_SIZE:
-            raise ValueError("AES decrypt: data length not /16!")
+        if enc_size % _AES_BLOCK_SIZE != 0:
+            raise ValueError(f"Data for AES decryption length not a multiple of {_AES_BLOCK_SIZE}!")
         # Decrypt chunks from input file, write to output, remove trailing padding.
         # This avoids having the whole file in-memory at one time; essential for large files!
         # Use a temporary file and create the true output file only on success.
@@ -213,10 +213,10 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
                         #  (c.f. google_iphone_dataprotection.removePadding)
                         n = int(dec_data[-1])  # RFC 1423, final byte contains number of padding bytes.
                         # Check padding is valid (n sensible, last n bytes identical):
-                        n_invalid = n == 0 or n > _CBC_BLOCK_SIZE or n > len(dec_data)
-                        padding_invalid = not dec_data[-1:]*n == dec_data[-n:]
+                        n_invalid = n == 0 or n > _AES_BLOCK_SIZE or n > len(dec_data)
+                        padding_invalid = dec_data[-1:]*n != dec_data[-n:]
                         if n_invalid or padding_invalid:
-                            raise ValueError('AES decrypt: invalid CBC padding')
+                            raise ValueError('Invalid CBC padding on decrypted data!')
                         # Remove the padding:
                         dec_data = dec_data[:-n]
                     temp_filehandle.write(dec_data)
@@ -232,7 +232,7 @@ def aes_decrypt_chunked(*, in_filename, key, out_filepath):
         return dec_size
 
 
-def remove_cbc_padding(data, blocksize=16):
+def remove_cbc_padding(data, blocksize=_AES_BLOCK_SIZE):
     """
     Remove the padding from CBC mode decrypted data.
 
@@ -251,7 +251,7 @@ def remove_cbc_padding(data, blocksize=16):
     n = int(data[-1])  # RFC 1423, final byte contains number of padding bytes.
     # Check padding is valid (n sensible, last n bytes identical):
     n_invalid = n == 0 or n > blocksize or n > len(data)
-    padding_invalid = not data[-1:]*n == data[-n:]
+    padding_invalid = data[-1:]*n != data[-n:]
     if n_invalid or padding_invalid:
-        raise ValueError('AES decrypt: invalid CBC padding')
+        raise ValueError('Invalid CBC padding on decrypted data!')
     return data[:-n]
