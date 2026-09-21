@@ -65,8 +65,8 @@ class EncryptedBackup:
         self._manifest_plist = None
         self._manifest_db_path = os.path.join(self._backup_directory, 'Manifest.db')
         # We need a temporary file for the decrypted database, because SQLite can't open bytes in memory as a database:
-        self._temporary_folder = tempfile.mkdtemp()
-        self._temp_decrypted_manifest_db_path = os.path.join(self._temporary_folder, 'Manifest.db')
+        self._temporary_folder = None
+        self._temp_decrypted_manifest_db_path = None
         # We can keep a connection to the index SQLite database open:
         self._temp_manifest_db_conn = None
 
@@ -77,7 +77,8 @@ class EncryptedBackup:
         try:
             if self._temp_manifest_db_conn is not None:
                 self._temp_manifest_db_conn.close()
-            shutil.rmtree(self._temporary_folder)
+            if self._temporary_folder is not None:
+                shutil.rmtree(self._temporary_folder)
         except Exception:
             print("WARN: Cleanup failed. You may want to delete the decrypted temporary file found at:")
             print(f"    '{self._temp_decrypted_manifest_db_path}'")
@@ -129,10 +130,13 @@ class EncryptedBackup:
             raise ValueError("Fatal error whilst querying Manifest.db file!") from e
 
     def _decrypt_manifest_db_file(self):
-        if os.path.exists(self._temp_decrypted_manifest_db_path):
+        if self._temporary_folder is not None and os.path.exists(self._temp_decrypted_manifest_db_path):
             return
         # Ensure we've already unlocked the Keybag:
         self._read_and_unlock_keybag()
+        # Create the temporary directory for the decrypted copy:
+        self._temporary_folder = tempfile.mkdtemp()
+        self._temp_decrypted_manifest_db_path = os.path.join(self._temporary_folder, 'Manifest.db')
         # Decrypt the Manifest.db index database:
         manifest_key = self._manifest_plist['ManifestKey'][4:]
         manifest_class = struct.unpack('<l', self._manifest_plist['ManifestKey'][:4])[0]
