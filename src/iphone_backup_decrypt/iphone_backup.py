@@ -55,6 +55,7 @@ class EncryptedBackup:
             raise TypeError("If provided, the passphrase must be a string or bytes object!")
         # Public state:
         self.decrypted = False
+        self.keybag = None
         # Keep track of the backup directory, and more dangerously, keep the backup passphrase as bytes until used:
         self._backup_directory = os.path.expandvars(backup_directory)
         self._passphrase_key = passphrase_key
@@ -63,7 +64,6 @@ class EncryptedBackup:
         self._manifest_plist_path = os.path.join(self._backup_directory, 'Manifest.plist')
         self._manifest_plist = None
         self._manifest_db_path = os.path.join(self._backup_directory, 'Manifest.db')
-        self._keybag = None
         # We need a temporary file for the decrypted database, because SQLite can't open bytes in memory as a database:
         self._temporary_folder = tempfile.mkdtemp()
         self._temp_decrypted_manifest_db_path = os.path.join(self._temporary_folder, 'Manifest.db')
@@ -84,8 +84,8 @@ class EncryptedBackup:
             raise
 
     def _read_and_unlock_keybag(self):
-        if self._keybag and self._keybag.unlocked:
-            return self._keybag.unlocked
+        if self.keybag and self.keybag.unlocked:
+            return self.keybag.unlocked
         # Open the Manifest.plist file we need to access the Keybag:
         with open(self._manifest_plist_path, 'rb') as infile:
             self._manifest_plist = plistlib.load(infile)
@@ -93,12 +93,12 @@ class EncryptedBackup:
         if not self._manifest_plist.get("IsEncrypted"):
             raise ValueError("Backup does not look like an encrypted iOS backup!")
         # Load and unlock the keybag data:
-        self._keybag = utils.BackupKeyBag(self._manifest_plist['BackupKeyBag'])
+        self.keybag = utils.BackupKeyBag(self._manifest_plist['BackupKeyBag'])
         if self._passphrase_key is not None:
-            self._keybag.unlock_with_key(self._passphrase_key)
+            self.keybag.unlock_with_key(self._passphrase_key)
         else:
-            self._keybag.unlock_with_passphrase(self._passphrase)
-        if not self._keybag.unlocked:
+            self.keybag.unlock_with_passphrase(self._passphrase)
+        if not self.keybag.unlocked:
             raise ValueError("Failed to decrypt keys: incorrect passphrase?")
         # No need to keep the passphrase now:
         self._passphrase = None
@@ -136,7 +136,7 @@ class EncryptedBackup:
         # Decrypt the Manifest.db index database:
         manifest_key = self._manifest_plist['ManifestKey'][4:]
         manifest_class = struct.unpack('<l', self._manifest_plist['ManifestKey'][:4])[0]
-        key = self._keybag.unwrap_key_for_class(manifest_class, manifest_key)
+        key = self.keybag.unwrap_key_for_class(manifest_class, manifest_key)
         utils.aes_decrypt_chunked(in_filename=self._manifest_db_path, out_filepath=self._temp_decrypted_manifest_db_path, key=key)
         # Open the temporary database to verify decryption success:
         self._open_temp_database()
@@ -213,7 +213,7 @@ class EncryptedBackup:
         # Extract the decryption key from the PList data:
         if file_plist.encryption_key is None:
             raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a directory or empty.
-        inner_key = self._keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
+        inner_key = self.keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
         # Find the encrypted version of the file on disk and decrypt it:
         filename_in_backup = utils.backup_file_path(self._backup_directory, file_id)
         with open(filename_in_backup, 'rb') as encrypted_file_filehandle:
@@ -331,7 +331,7 @@ class EncryptedBackup:
         # Extract the required metadata:
         file_id, file_bplist = self._file_metadata_from_manifest(relative_path, domain_like)
         file_plist = utils.FilePlist(file_bplist)
-        inner_key = self._keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
+        inner_key = self.keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
         # Decrypt the requested file:
         self._decrypt_file_to_disk(file_id=file_id, file_plist=file_plist, key=inner_key, output_filepath=output_filename)
 
@@ -462,7 +462,7 @@ class EncryptedBackup:
                     # Skip re-writing this file to disk since it has not changed.
                     continue
             # Decrypt the file to disk:
-            inner_key = self._keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
+            inner_key = self.keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
             self._decrypt_file_to_disk(file_id=file_id, key=inner_key, file_plist=file_plist,
                                        output_filepath=output_filepath)
             n_files += 1

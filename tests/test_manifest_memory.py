@@ -64,7 +64,7 @@ class ManifestMemoryTests(unittest.TestCase):
 
         backup = EncryptedBackup.__new__(EncryptedBackup)
         backup._temp_manifest_db_conn = connection
-        backup._keybag = MagicMock()
+        backup.keybag = MagicMock()
         backup._cleanup = lambda: None
 
         file_plist = MagicMock(mtime=None, protection_class=1, encryption_key=b"key")
