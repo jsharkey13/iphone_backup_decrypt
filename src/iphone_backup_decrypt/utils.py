@@ -124,6 +124,8 @@ class FilePlist:
 
 class BackupKeyBag:
 
+    _WRAP_PASSPHRASE = 2
+
     def __init__(self, keybag_bytes):
         """
         Load BackupKeyBag data from Manifest.plist into a usable form.
@@ -141,6 +143,7 @@ class BackupKeyBag:
         self.wrap = None
         self.attrs = {}
         self.classes_data = {}
+        self.classes_keys = {}
         self.passphrase_key = None
         self._parse_bytes(keybag_bytes)
 
@@ -204,13 +207,13 @@ class BackupKeyBag:
         :return: whether all protection class keys were successfully unlocked.
         """
         self.passphrase_key = passphrase_key
-        for class_data in self.classes_data.values():
+        for protection_class, class_data in self.classes_data.items():
             if b"WPKY" not in class_data:
                 continue
-            WRAP_PASSPHRASE = 2
-            if class_data[b"WRAP"] & WRAP_PASSPHRASE:
+            if class_data[b"WRAP"] & BackupKeyBag._WRAP_PASSPHRASE:
                 try:
-                    class_data[b"KEY"] = aes_unwrap(key_encryption_key=self.passphrase_key, wrapped_key=class_data[b"WPKY"])
+                    self.classes_keys[protection_class] = aes_unwrap(key_encryption_key=self.passphrase_key,
+                                                                     wrapped_key=class_data[b"WPKY"])
                 except ValueError:
                     return False
         self.unlocked = True
@@ -259,7 +262,7 @@ class BackupKeyBag:
         """
         if not self.unlocked:
             raise ValueError("BackupKeyBag must be unlocked before using this method!")
-        class_key = self.classes_data[protection_class].get(b"KEY")
+        class_key = self.classes_keys.get(protection_class)
         if class_key is None:
             raise RuntimeError(f"Key for protection class {protection_class} not present in BackupKeyBag!")
         if len(wrapped_file_key) != 0x28:
