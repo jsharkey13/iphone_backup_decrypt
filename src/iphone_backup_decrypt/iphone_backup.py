@@ -7,6 +7,7 @@ import tempfile
 from contextlib import contextmanager
 
 from . import utils
+from .exceptions import BackupNotEncryptedError, IncorrectPassphraseError, NotABackupFolderError
 
 __all__ = ["EncryptedBackup"]
 
@@ -45,8 +46,21 @@ class EncryptedBackup:
                 key = backup._keybag.passphrase_key
             If provided as well as 'passphrase', the key will be used in preference.
             Either 'passphrase' or 'passphrase_key' must be provided.
+
+        :raises NotABackupFolderError:
+            If the provided 'backup_directory' does not contain the two required Manifest.plist and
+            Manifest.db files.
+        :raises FileNotFoundError:
+            If the provided 'backup_directory' does not exist.
+        :raises TypeError:
+            If the provided 'passphrase' is not a string or bytes, or if 'passphrase_key' is provided
+            and is not a bytes object. If 'backup_directory' is not a string.
+        :raises ValueError:
+            If both 'passphrase' and 'passphrase_key' are not provided.
         """
-        # Validate the passphrase:
+        # Validate the folder (stuck forever called 'backup_directory') and passphrase:
+        if not isinstance(backup_directory, str):
+            raise TypeError("The provided backup_directory must be a string.")
         if passphrase is None and passphrase_key is None:
             raise ValueError("Either the passphrase or passphrase_key must be provided!")
         if not isinstance(passphrase_key, bytes) and passphrase_key is not None:
@@ -64,6 +78,11 @@ class EncryptedBackup:
         self._manifest_plist_path = os.path.join(self._backup_directory, 'Manifest.plist')
         self._manifest_plist = None
         self._manifest_db_path = os.path.join(self._backup_directory, 'Manifest.db')
+        # Verify backup_directory seems valid:
+        if not os.path.exists(self._backup_directory):
+            raise FileNotFoundError("The provided 'backup_directory' does not exist!")
+        if not os.path.exists(self._manifest_plist_path) and not os.path.exists(self._manifest_db_path):
+            raise NotABackupFolderError("Backup folder does not contain expected Manifest files!")
         # We need a temporary file for the decrypted database, because SQLite can't open bytes in memory as a database:
         self._temporary_folder = None
         self._temp_decrypted_manifest_db_path = None
@@ -96,7 +115,7 @@ class EncryptedBackup:
             self._manifest_plist = plistlib.load(infile)
         # Is this an encrypted backup?
         if not self._manifest_plist.get("IsEncrypted"):
-            raise ValueError("Backup does not look like an encrypted iOS backup!")
+            raise BackupNotEncryptedError("Backup does not look like an encrypted iOS backup!")
         # Load and unlock the keybag data:
         self.keybag = utils.BackupKeyBag(self._manifest_plist['BackupKeyBag'])
         if self._passphrase_key is not None:
@@ -104,7 +123,7 @@ class EncryptedBackup:
         else:
             self.keybag.unlock_with_passphrase(self._passphrase)
         if not self.keybag.unlocked:
-            raise ValueError("Failed to decrypt keys: incorrect passphrase?")
+            raise IncorrectPassphraseError("Failed to decrypt keys: incorrect passphrase?")
         # No need to keep the passphrase now:
         self._passphrase = None
         self._passphrase_key = None
@@ -138,7 +157,7 @@ class EncryptedBackup:
             return
         # Ensure we've already unlocked the Keybag:
         self._read_and_unlock_keybag()
-        # Create the temporary directory for the decrypted copy:
+        # Create the temporary folder for the decrypted copy:
         self._temporary_folder = tempfile.mkdtemp()
         self._temp_decrypted_manifest_db_path = os.path.join(self._temporary_folder, 'Manifest.db')
         # Decrypt the Manifest.db index database:
@@ -220,7 +239,7 @@ class EncryptedBackup:
         file_plist = utils.FilePlist(file_bplist)
         # Extract the decryption key from the PList data:
         if file_plist.encryption_key is None:
-            raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a directory or empty.
+            raise ValueError("Path is not an encrypted file.")  # File is not encrypted; either a folder or empty.
         inner_key = self.keybag.unwrap_key_for_class(file_plist.protection_class, file_plist.encryption_key)
         # Find the encrypted version of the file on disk and decrypt it:
         filename_in_backup = utils.backup_file_path(self._backup_directory, file_id)
@@ -252,7 +271,16 @@ class EncryptedBackup:
             os.utime(output_filepath, times=(file_plist.mtime, file_plist.mtime))
 
     def test_decryption(self):
-        """Validate that the backup can be decrypted successfully."""
+        """
+        Validate that the backup can be decrypted successfully.
+
+        :raises BackupNotEncryptedError:
+            If the backup does not appear to be encrypted.
+        :raises IncorrectPassphraseError:
+            If the provided passphrase does not appear to be correct.
+        :raises UnsafeBackupError:
+            If the Manifest.plist file appears to contain malicious configuration.
+        """
         # Ensure that we've initialised everything:
         if self._temp_manifest_db_conn is None:
             self._decrypt_manifest_db_file()

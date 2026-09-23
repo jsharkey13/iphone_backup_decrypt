@@ -6,6 +6,8 @@ import tempfile
 
 import Crypto.Cipher.AES
 
+from .exceptions import UnsafeBackupError, BackupKeyBagNotUnlockedError
+
 try:
     # Prefer a fast, pure C++ implementation:
     from fastpbkdf2 import pbkdf2_hmac
@@ -160,7 +162,7 @@ class BackupKeyBag:
     @staticmethod
     def _validate_iterations(value, field_name, maximum):
         if not isinstance(value, int) or value < 1 or value > maximum:
-            raise ValueError(f"Invalid BackupKeybag {field_name} iteration count {repr(value)};" +
+            raise UnsafeBackupError(f"Invalid BackupKeybag {field_name} iteration count {repr(value)};" +
                              f" expected an integer between 1 and {maximum}!")
         return value
 
@@ -231,6 +233,8 @@ class BackupKeyBag:
             The passphrase chosen when the encrypted backup was first created, as a string.
 
         :return: whether all protection class keys were successfully unlocked.
+        :raises UnsafeBackupError:
+            If the Manifest.plist key derivation iteration counts appear malicious.
         """
         # Validate iteration counts before attempting to use them:
         dpic_iterations = BackupKeyBag._validate_iterations(self.attrs[b"DPIC"], "DPIC", _MAX_DPIC_ITERATIONS)
@@ -259,12 +263,17 @@ class BackupKeyBag:
             The key found in the binary PList data in Manifest.db for the file of interest.
 
         :return: the unwrapped file key.
+        :raises BackupKeyBagNotUnlockedError:
+            If the keybag has not yet been unlocked with the backup passphrase.
+        :raises ValueError:
+            If the format of the provided key is incorrect, or the protection class is not contained
+            in the keybag.
         """
         if not self.unlocked:
-            raise ValueError("BackupKeyBag must be unlocked before using this method!")
+            raise BackupKeyBagNotUnlockedError("BackupKeyBag must be unlocked before using this method!")
         class_key = self.classes_keys.get(protection_class)
         if class_key is None:
-            raise RuntimeError(f"Key for protection class {protection_class} not present in BackupKeyBag!")
+            raise ValueError(f"Key for protection class {protection_class} not present in BackupKeyBag!")
         if len(wrapped_file_key) != 0x28:
             raise ValueError("Invalid wrapped file key length!")
         return aes_unwrap(key_encryption_key=class_key, wrapped_key=wrapped_file_key)
@@ -280,11 +289,13 @@ def _safe_path_join(root_folder, *untrusted_parts):
         The untrusted path segments to join underneath the root folder.
 
     :return: a safe absolute filepath.
-    :raises ValueError:
+    :raises TypeError:
+        If the provided untrusted path segments are not strings.
+    :raises UnsafeBackupError:
         If the untrusted parts lead to directory traversal outside the root folder.
     """
     if not all(isinstance(part, str) for part in untrusted_parts):
-        raise ValueError("Path components must be strings!")
+        raise TypeError("Path components must be strings!")
 
     true_root = os.path.realpath(os.path.abspath(root_folder))
     joined_path = os.path.realpath(os.path.abspath(os.path.join(true_root, *untrusted_parts)))
@@ -294,7 +305,7 @@ def _safe_path_join(root_folder, *untrusted_parts):
         is_within_output = False
     if not is_within_output:
         path_items = (root_folder,) + untrusted_parts
-        raise ValueError(f"Unsafe path join {repr(path_items)} leads to {repr(joined_path)}!")
+        raise UnsafeBackupError(f"Unsafe path join {repr(path_items)} leads to {repr(joined_path)}!")
     return joined_path
 
 
@@ -309,15 +320,17 @@ def backup_file_path(backup_folder, file_id):
 
     :return: a safe absolute filepath to that file in the backup.
     :raises ValueError:
-        If the generated path leads to directory traversal outside backup_folder.
+        If the provided file ID does not conform to the standard iOS format.
+    :raises UnsafeBackupError:
+        If the generated path leads to directory traversal outside 'backup_folder'.
     """
     if not isinstance(file_id, str) or _FILE_ID_PATTERN.fullmatch(file_id) is None:
         raise ValueError(f"Invalid backup file ID: {repr(file_id)}")
 
     try:
         return _safe_path_join(backup_folder, file_id[:2], file_id)
-    except ValueError as e:
-        raise ValueError("Backup file path escapes backup folder!") from e
+    except UnsafeBackupError as e:
+        raise UnsafeBackupError("Backup file path escapes backup folder!") from e
 
 
 def safe_output_path(output_folder, *untrusted_parts):
@@ -330,13 +343,13 @@ def safe_output_path(output_folder, *untrusted_parts):
         The untrusted path segments to join underneath the output folder.
 
     :return: a safe absolute filepath.
-    :raises ValueError:
-        If the untrusted parts lead to directory traversal outside the root directory.
+    :raises UnsafeBackupError:
+        If the untrusted parts lead to directory traversal outside 'output_folder'.
     """
     try:
         return _safe_path_join(output_folder, *untrusted_parts)
-    except ValueError as e:
-        raise ValueError("Generated output path escapes output folder!") from e
+    except UnsafeBackupError as e:
+        raise UnsafeBackupError("Generated output path escapes output folder!") from e
 
 
 def aes_unwrap(*, key_encryption_key, wrapped_key):
