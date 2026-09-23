@@ -49,9 +49,9 @@ class EncryptedBackup:
         # Validate the passphrase:
         if passphrase is None and passphrase_key is None:
             raise ValueError("Either the passphrase or passphrase_key must be provided!")
-        if not isinstance(passphrase_key, bytes):
+        if not isinstance(passphrase_key, bytes) and passphrase_key is not None:
             raise TypeError("If provided, the passphrase_key must be a bytes object!")
-        if not isinstance(passphrase, (str, bytes)):
+        if not isinstance(passphrase, (str, bytes)) and passphrase is not None:
             raise TypeError("If provided, the passphrase must be a string or bytes object!")
         # Public state:
         self.decrypted = False
@@ -59,7 +59,7 @@ class EncryptedBackup:
         # Keep track of the backup directory, and more dangerously, keep the backup passphrase as bytes until used:
         self._backup_directory = os.path.expandvars(backup_directory)
         self._passphrase_key = passphrase_key
-        self._passphrase = passphrase if isinstance(passphrase, bytes) else passphrase.encode("utf-8")
+        self._passphrase = passphrase if isinstance(passphrase, bytes) else passphrase.encode("utf-8") if passphrase else None
         # Internals for unlocking the Keybag:
         self._manifest_plist_path = os.path.join(self._backup_directory, 'Manifest.plist')
         self._manifest_plist = None
