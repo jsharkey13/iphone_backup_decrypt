@@ -74,6 +74,10 @@ class EncryptedBackup:
         self._cleanup()
 
     def _cleanup(self):
+        # If initialisation never finished, nothing to clean up:
+        if not (hasattr(self, '_temp_manifest_db_conn') and hasattr(self, '_temp_decrypted_manifest_db_path')):
+            return
+        # Else attempt to clean up the decrypted temporary data, and warn user if it fails:
         try:
             if self._temp_manifest_db_conn is not None:
                 self._temp_manifest_db_conn.close()
