@@ -23,6 +23,8 @@ fastpbkdf2 = ["fastpbkdf2>=0.2"]
 
 [project.urls]
 Homepage = "https://github.com/jsharkey13/iphone_backup_decrypt"
+Changelog = "https://github.com/jsharkey13/iphone_backup_decrypt/releases"
+Source = "https://github.com/jsharkey13/iphone_backup_decrypt"
 
 [build-system]
 requires = ["setuptools"]
