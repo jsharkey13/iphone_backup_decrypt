@@ -15,7 +15,7 @@ classifiers = [
 keywords = ["iPhone", "backup", "forensics", "iOS", "WhatsApp", "decryption", "iOS backup", "iTunes Backup"]
 
 dependencies = [
-    "pycryptodome>=3.20.0"
+    "pycryptodome>=3.23.0"
 ]
 
 [project.optional-dependencies]
